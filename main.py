@@ -6,6 +6,7 @@ from modules.exploiter import ExploiterModule
 from modules.mitre_mapper import MitreMapper
 from modules.post_exploit import PostExploitModule
 from modules.reporter import ReporterModule
+from modules.social_engineering import SocialEngineeringModule
 
 def main():
     print("=" * 60)
@@ -67,7 +68,19 @@ def main():
             )
             break
 
-    # Phase 8 - Reporting (R10)
+    # Phase 8 - Social Engineering Campaign
+    target_domain = target.split("/")[0]
+    open_services = []
+    for host_data in scan_results.values():
+        for p in host_data["ports"]:
+            svc = p.get("service", "")
+            if svc and svc not in open_services:
+                open_services.append(svc)
+
+    se_module = SocialEngineeringModule(target_domain, lhost)
+    se_results = se_module.run_campaign({"open_services": open_services})
+
+    # Phase 9 - Reporting (R10)
     reporter = ReporterModule()
     report_file = reporter.generate_report(
         target,

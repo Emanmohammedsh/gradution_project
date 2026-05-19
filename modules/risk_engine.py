@@ -8,6 +8,35 @@ class RiskEngine:
             "WEB-SCAN": 4.0
         }
 
+        # Server priority weights — higher = more attractive attack target
+        self.service_priority_weights = {
+            "ftp":    10,   # Often misconfigured, direct file access
+            "smb":    10,   # Lateral movement / ransomware vector
+            "samba":  10,   # Same as SMB
+            "telnet":  9,   # Plaintext credentials
+            "ssh":     8,   # Remote shell access
+            "http":    7,   # Web application attack surface
+            "https":   7,
+            "mysql":   8,   # Database — sensitive data
+            "mssql":   8,
+            "rdp":     9,   # Remote Desktop — direct GUI access
+            "smtp":    6,   # Social engineering relay
+            "pop3":    5,
+            "imap":    5,
+            "vnc":     9,   # Unencrypted remote desktop
+            "snmp":    6,   # Information disclosure
+        }
+
+    def get_service_priority_bonus(self, finding):
+        """Return bonus points based on the service type."""
+        service = finding.get("service", "").lower()
+        product = finding.get("matched_key", "").lower()
+
+        for svc, weight in self.service_priority_weights.items():
+            if svc in service or svc in product:
+                return weight * 2   # Scale to match point system (max ~20)
+        return 0
+
     def calculate_risk(self, finding):
         score = 0
 
@@ -29,10 +58,17 @@ class RiskEngine:
         if finding.get("type") == "hydra":
             score += 20
 
+        # Server Priority Bonus (max 20 points)
+        priority_bonus = self.get_service_priority_bonus(finding)
+        score += priority_bonus
+        finding["priority_bonus"] = priority_bonus
+
         finding["risk_score"] = round(score)
+        finding["cvss"] = cvss
 
         print(f"  [Risk] {finding['host']}:{finding['port']} | "
-              f"CVE: {cve} | Risk Score: {round(score)}")
+              f"CVE: {cve} | CVSS: {cvss} | "
+              f"Priority Bonus: +{priority_bonus} | Risk Score: {round(score)}")
 
         return finding
 
@@ -54,5 +90,16 @@ class RiskEngine:
         print(f"\n  [+] High Risk Targets: {len(scored)}")
         print(f"  [-] Deferred Targets : {len(deferred)}")
 
-        scored.sort(key=lambda x: x["risk_score"], reverse=True)
+        # Sort by: risk_score DESC, then CVSS DESC, then priority_bonus DESC
+        scored.sort(
+            key=lambda x: (x["risk_score"], x.get("cvss", 0), x.get("priority_bonus", 0)),
+            reverse=True
+        )
+
+        print(f"\n  [Server Priority Order]")
+        for i, f in enumerate(scored, 1):
+            print(f"    #{i} {f['host']}:{f['port']} | "
+                  f"Score: {f['risk_score']} | CVSS: {f.get('cvss', 'N/A')} | "
+                  f"Service: {f.get('service', '?')}")
+
         return scored

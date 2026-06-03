@@ -1,14 +1,13 @@
 """
-reporter.py
------------
-Generates the final penetration testing report.
-Includes: Recon → Scan → Vulns → Risk → Exploit → Post-Exploit
-          → MITRE ATT&CK → Social Engineering → Recommendations
+reporter.py  —  Enhanced Report Generator
+Produces:
+  1. reports/report_<ts>.txt       — human-readable full report
+  2. reports/attack_report_<ts>.json — structured JSON (for frontend/API)
 """
 
 import datetime
-import os
 import json
+import os
 
 
 class ReporterModule:
@@ -19,206 +18,207 @@ class ReporterModule:
 
     def generate_report(self, target, live_hosts, scan_results,
                         vuln_findings, exploit_results, post_data,
-                        se_results=None, attack_chain=None):
+                        attack_chain: dict | None = None) -> str:
 
-        print(f"\n[R10] Generating Report...")
+        print(f"\n[R10] Generating Reports...")
 
-        timestamp   = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        txt_file    = f"{self.report_dir}/report_{timestamp}.txt"
-        chain_file  = f"{self.report_dir}/attack_chain_{timestamp}.json"
+        ts       = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        txt_path  = f"{self.report_dir}/report_{ts}.txt"
+        json_path = f"{self.report_dir}/attack_report_{ts}.json"
 
-        with open(txt_file, "w", encoding="utf-8") as f:
-            self._write_header(f, target, live_hosts)
-            self._write_scan(f, scan_results)
-            self._write_vulns(f, vuln_findings)
-            self._write_exploits(f, exploit_results)
-            self._write_post(f, post_data)
-            self._write_mitre(f, exploit_results)
-            if se_results:
-                self._write_se(f, se_results)
-            self._write_recommendations(f, vuln_findings)
-            self._write_footer(f)
+        self._write_txt(txt_path, target, live_hosts, scan_results,
+                        vuln_findings, exploit_results, post_data, attack_chain)
 
-        print(f"  [+] Report saved     : {txt_file}")
+        self._write_json(json_path, target, live_hosts, scan_results,
+                         vuln_findings, exploit_results, post_data, attack_chain)
 
-        # Save attack chain JSON separately
-        if attack_chain:
-            with open(chain_file, "w", encoding="utf-8") as f:
-                json.dump(attack_chain, f, indent=2)
-            print(f"  [+] Attack chain     : {chain_file}")
+        print(f"  [+] TXT  report → {txt_path}")
+        print(f"  [+] JSON report → {json_path}")
+        return txt_path
 
-        return txt_file
+    # ── TXT ───────────────────────────────────────────────────────────
 
-    # -----------------------------------------------------------------------
-
-    def _write_header(self, f, target, live_hosts):
+    def _write_txt(self, path, target, live_hosts, scan_results,
+                   vuln_findings, exploit_results, post_data, attack_chain):
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        f.write("=" * 60 + "\n")
-        f.write("   PENETRATION TESTING REPORT\n")
-        f.write("   Hybrid AI Red Teaming Framework\n")
-        f.write("=" * 60 + "\n\n")
-        f.write(f"Date       : {now}\n")
-        f.write(f"Target     : {target}\n")
-        f.write(f"Live Hosts : {len(live_hosts)}\n\n")
+        with open(path, "w", encoding="utf-8") as f:
 
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 1 — RECONNAISSANCE\n")
-        f.write("=" * 60 + "\n")
-        for host in live_hosts:
-            f.write(f"  [+] Live Host: {host}\n")
-        f.write("\n")
+            def ln(s=""): f.write(s + "\n")
+            def sec(title):
+                ln(); ln("=" * 60); ln(title); ln("=" * 60)
 
-    def _write_scan(self, f, scan_results):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 2 — SCANNING AND ENUMERATION\n")
-        f.write("=" * 60 + "\n")
-        for host, data in scan_results.items():
-            f.write(f"\n  Host : {host}\n")
-            f.write(f"  OS   : {data.get('os', 'unknown')}\n")
-            f.write(f"  Open Ports:\n")
-            for p in data["ports"]:
-                f.write(
-                    f"    Port {p['port']:>5} | "
-                    f"{p['service']:<10} | "
-                    f"{p['product']} {p['version']}\n"
-                )
-        f.write("\n")
+            ln("=" * 60)
+            ln("   PENETRATION TESTING REPORT")
+            ln("   Hybrid AI Red Team Simulation Framework")
+            ln("   UCAS Cyber Security Engineering 2026")
+            ln("=" * 60)
+            ln(f"Date       : {now}")
+            ln(f"Target     : {target}")
+            ln(f"Live Hosts : {len(live_hosts)}")
 
-    def _write_vulns(self, f, vuln_findings):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 3 — VULNERABILITY MAPPING\n")
-        f.write("=" * 60 + "\n")
-        for finding in vuln_findings:
-            sev = finding.get("severity", "unknown").upper()
-            f.write(f"\n  [{sev}] {finding['host']}:{finding['port']}\n")
-            f.write(f"    Service  : {finding.get('service', 'N/A')}\n")
-            f.write(f"    CVE      : {finding.get('cve', 'N/A')}\n")
-            f.write(f"    CVSS     : {finding.get('cvss', 'N/A')}\n")
-            f.write(f"    Exploit  : {finding.get('exploit', 'N/A')}\n")
-            f.write(f"    Source   : {finding.get('source', 'N/A')}\n")
-            if finding.get("edb_title"):
-                f.write(f"    Title    : {finding['edb_title']}\n")
-            # AI prioritizer output
-            if finding.get("ai_priority"):
-                pri_label = {1: "HIGH", 2: "MEDIUM", 3: "LOW"}.get(
-                    finding["ai_priority"], "?"
-                )
-                f.write(
-                    f"    AI Rank  : {pri_label} "
-                    f"(source={finding.get('ai_source','?')}, "
-                    f"conf={finding.get('ai_confidence','?')})\n"
-                )
-        f.write("\n")
+            # ── Phase 1 ──
+            sec("PHASE 1 — RECONNAISSANCE")
+            for h in live_hosts:
+                ln(f"  [+] {h}")
 
-    def _write_exploits(self, f, exploit_results):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 4 — EXPLOITATION\n")
-        f.write("=" * 60 + "\n")
-        for result in exploit_results:
-            status = "SUCCESS" if result.get("success") else "FAILED"
-            f.write(f"\n  [{status}] {result['host']}:{result['port']}\n")
-            f.write(f"    Exploit  : {result.get('exploit', 'N/A')}\n")
-        f.write("\n")
+            # ── Phase 2 ──
+            sec("PHASE 2 — SCANNING & ENUMERATION")
+            for host, data in scan_results.items():
+                ln(f"\n  Host: {host}  |  OS: {data.get('os','unknown')}")
+                for p in data["ports"]:
+                    ln(f"    {p['port']:>5}/tcp  {p['service']:<20} {p['product']} {p['version']}")
 
-    def _write_post(self, f, post_data):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 5 — POST-EXPLOITATION\n")
-        f.write("=" * 60 + "\n")
-        if post_data:
-            f.write(f"  Host       : {post_data.get('host', 'N/A')}\n")
-            # Classic post_exploit.py output
-            if post_data.get("uid"):
-                f.write(f"  UID        : {post_data.get('uid', ['N/A'])}\n")
-            if post_data.get("hashes"):
-                f.write(f"  Hashes     : {post_data.get('hashes', ['N/A'])}\n")
-            # AI post_exploit_ai.py output
-            if post_data.get("os_type"):
-                f.write(f"  OS Type    : {post_data.get('os_type', 'N/A')}\n")
-                f.write(f"  Privilege  : {post_data.get('privilege_level', 'N/A')}\n")
-                f.write(f"  AI Action  : {post_data.get('recommended_action', 'N/A')} "
-                        f"(conf={post_data.get('ai_confidence', 'N/A')})\n")
-            if post_data.get("credentials"):
-                f.write(f"  Credentials: {len(post_data['credentials'])} found\n")
-                for cred in post_data["credentials"]:
-                    f.write(f"    - {cred}\n")
-            if post_data.get("users"):
-                f.write(f"  Users      : {', '.join(post_data['users'])}\n")
-            if post_data.get("network_info"):
-                ni = post_data["network_info"]
-                f.write(f"  IPs Found  : {', '.join(ni.get('ips_found', []))}\n")
-        else:
-            f.write("  No post-exploitation data collected.\n")
-        f.write("\n")
+            # ── Phase 3 ──
+            sec("PHASE 3 — VULNERABILITY MAPPING")
+            for f_ in vuln_findings:
+                ln(f"\n  {f_['host']}:{f_['port']}  |  {f_['service']}")
+                ln(f"  CVE      : {f_['cve']}")
+                ln(f"  Severity : {f_['severity'].upper()}  |  CVSS: {f_['cvss']}")
+                ln(f"  Exploit  : {f_['exploit']}")
+                if f_.get("edb_title"):
+                    ln(f"  Title    : {f_['edb_title']}")
 
-    def _write_mitre(self, f, exploit_results):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 6 — MITRE ATT&CK MAPPING\n")
-        f.write("=" * 60 + "\n")
-        for result in exploit_results:
-            mitre = result.get("mitre")
-            if not mitre:
-                continue
-            f.write(f"\n  Host       : {result['host']}:{result['port']}\n")
-            f.write(f"  Tactic     : {mitre.get('tactic', 'unknown')}\n")
-            f.write(f"  Phase      : {mitre.get('attack_phase', '?')}\n")
-            f.write(f"  Confidence : {mitre.get('confidence', 0):.2f} "
-                    f"[{mitre.get('source', '?')}]\n")
-            f.write(f"  Techniques :\n")
-            for tech in mitre.get("techniques", []):
-                f.write(f"    [{tech['id']}] {tech.get('name', '')}\n")
-            for tech in mitre.get("extra_techniques", []):
-                f.write(f"    [{tech['id']}] {tech.get('name', '')} (post-exploit)\n")
-        f.write("\n")
+            # ── Phase 4 ──
+            sec("PHASE 4 — EXPLOITATION")
+            for r in exploit_results:
+                if r.get("_is_post"):
+                    continue
+                status = "SUCCESS" if r.get("success") else "FAILED"
+                ln(f"\n  {r['host']}:{r['port']}  |  {r['exploit']}")
+                ln(f"  Status : {status}")
 
-    def _write_se(self, f, se_results):
-        f.write("=" * 60 + "\n")
-        f.write("PHASE 7 — SOCIAL ENGINEERING CAMPAIGN\n")
-        f.write("=" * 60 + "\n")
-        f.write(f"  Domain     : {se_results.get('domain', 'N/A')}\n")
-        profile = se_results.get("osint_profile", {})
-        f.write(f"  Surface    : {profile.get('attack_surface', 'N/A')}/10\n")
-        f.write(f"  Emails Gen : {len(se_results.get('phishing_emails', []))}\n")
-        for email in se_results.get("phishing_emails", []):
-            f.write(f"\n    Pretext  : {email.get('pretext')}\n")
-            f.write(f"    From     : {email.get('sender')}\n")
-            f.write(f"    Subject  : {email.get('subject')}\n")
-            mitre = email.get("mitre", {})
-            f.write(f"    MITRE    : {mitre.get('id', 'N/A')} — {mitre.get('name', '')}\n")
-            f.write(f"    Risk     : {email.get('risk')}\n")
-        for t in se_results.get("mitre_tactics", []):
-            f.write(f"  [{t['id']}] {t['name']}\n")
-        f.write("\n")
+            # ── Phase 5 ──
+            sec("PHASE 5 — POST-EXPLOITATION")
+            if post_data:
+                ln(f"  Host   : {post_data.get('host','N/A')}")
+                ln(f"  UID    : {post_data.get('uid',['N/A'])}")
+                ln(f"  Hashes : {post_data.get('hashes',['N/A'])}")
+            else:
+                ln("  No session established.")
 
-    def _write_recommendations(self, f, vuln_findings):
-        f.write("=" * 60 + "\n")
-        f.write("RECOMMENDATIONS\n")
-        f.write("=" * 60 + "\n")
-        # Dynamic recommendations based on findings
-        has_critical = any(v.get("severity") == "critical" for v in vuln_findings)
-        has_brute    = any(v.get("type") == "hydra" for v in vuln_findings)
-        has_web      = any(v.get("service") in ("http", "https") for v in vuln_findings)
+            # ── Phase 6: MITRE ──
+            sec("PHASE 6 — MITRE ATT&CK MAPPING")
+            for r in exploit_results:
+                mitre = r.get("mitre", {})
+                if not mitre:
+                    continue
+                ln(f"\n  {r.get('host','')}:{r.get('port','')}  exploit: {r.get('exploit','')}")
+                ln(f"  Primary  : [{mitre.get('source','?')}] "
+                   f"{mitre.get('technique_id','?')} — {mitre.get('technique_name','?')}")
+                ln(f"  Tactic   : {mitre.get('tactic','?')}")
+                ln(f"  Conf     : {mitre.get('confidence',0):.0%}")
+                if len(r.get("layers", [])) > 1:
+                    ln(f"  All layers:")
+                    for lyr in r["layers"]:
+                        ln(f"    [{lyr.get('source','?')}] "
+                           f"{lyr.get('technique_id','?')} "
+                           f"{lyr.get('technique_name','?')} "
+                           f"({lyr.get('confidence',0):.0%})")
 
-        recs = [
-            "Apply all available security patches and updates immediately.",
-            "Disable or firewall unnecessary open ports and services.",
-        ]
-        if has_critical:
-            recs.append("CRITICAL: Patch or isolate systems with critical CVEs immediately.")
-        if has_brute:
-            recs.append("Enforce account lockout policies and strong password requirements.")
-            recs.append("Consider multi-factor authentication (MFA) on all remote services.")
-        if has_web:
-            recs.append("Deploy a Web Application Firewall (WAF) and harden web services.")
-        recs += [
-            "Enable IDS/IPS monitoring and centralized logging (SIEM).",
-            "Conduct regular penetration testing and vulnerability assessments.",
-            "Implement network segmentation to limit lateral movement.",
-        ]
-        for i, rec in enumerate(recs, 1):
-            f.write(f"  {i}. {rec}\n")
-        f.write("\n")
+            # ── Attack Chain ──
+            if attack_chain:
+                sec("PHASE 7 — ATTACK CHAIN (KILL-CHAIN)")
+                for phase_num, phase in attack_chain.items():
+                    ln(f"\n  Phase {phase_num}: {phase['phase_name']}  "
+                       f"[{phase['tactic']}]  conf={phase['confidence']:.0%}")
+                    for t in phase["techniques"]:
+                        ln(f"    {t['id']}  {t['name']}")
 
-    def _write_footer(self, f):
-        f.write("=" * 60 + "\n")
-        f.write("END OF REPORT\n")
-        f.write("=" * 60 + "\n")
+            # ── Recommendations ──
+            sec("RECOMMENDATIONS")
+            recs = [
+                "Patch all outdated software versions immediately (vsftpd, Samba, Apache).",
+                "Disable unnecessary services — close ports 21, 23, 6667 if not in use.",
+                "Enforce strong password policies and account lockout thresholds.",
+                "Segment the network — restrict lateral movement between hosts.",
+                "Deploy endpoint detection: monitor for hashdump, getsystem, arp sweep.",
+                "Enable IDS/IPS and correlate with MITRE ATT&CK navigator layer (attached).",
+                "Conduct periodic red team exercises against this attack chain.",
+            ]
+            for i, r in enumerate(recs, 1):
+                ln(f"  {i}. {r}")
+
+            ln(); ln("=" * 60); ln("END OF REPORT"); ln("=" * 60)
+
+    # ── JSON ──────────────────────────────────────────────────────────
+
+    def _write_json(self, path, target, live_hosts, scan_results,
+                    vuln_findings, exploit_results, post_data, attack_chain):
+
+        def sanitize(obj):
+            """Make objects JSON-serialisable."""
+            if isinstance(obj, dict):
+                return {k: sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [sanitize(i) for i in obj]
+            if isinstance(obj, (str, int, float, bool)) or obj is None:
+                return obj
+            return str(obj)
+
+        report = {
+            "meta": {
+                "generated":   datetime.datetime.now().isoformat(),
+                "target":      target,
+                "live_hosts":  live_hosts,
+                "framework":   "Hybrid AI Red Team v2",
+            },
+            "scan_summary": {
+                host: {
+                    "os":    data.get("os", "unknown"),
+                    "ports": data["ports"],
+                }
+                for host, data in scan_results.items()
+            },
+            "vulnerabilities": [
+                {
+                    "host":     f["host"],
+                    "port":     f["port"],
+                    "service":  f["service"],
+                    "cve":      f["cve"],
+                    "severity": f["severity"],
+                    "cvss":     f["cvss"],
+                    "risk_score": f.get("risk_score", 0),
+                    "exploit":  f["exploit"],
+                    "title":    f.get("edb_title", ""),
+                }
+                for f in vuln_findings
+            ],
+            "exploit_results": [
+                {
+                    "host":    r["host"],
+                    "port":    r["port"],
+                    "exploit": r["exploit"],
+                    "success": r.get("success", False),
+                    "mitre":   r.get("mitre", {}),
+                    "layers":  r.get("layers", []),
+                }
+                for r in exploit_results
+                if not r.get("_is_post")
+            ],
+            "post_exploitation": sanitize(post_data),
+            "attack_chain": attack_chain or {},
+            "mitre_summary": self._mitre_summary(exploit_results),
+        }
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(sanitize(report), f, indent=2, ensure_ascii=False)
+
+    @staticmethod
+    def _mitre_summary(exploit_results: list) -> dict:
+        """Aggregate techniques by tactic."""
+        by_tactic: dict[str, list] = {}
+        for r in exploit_results:
+            for lyr in r.get("layers", []):
+                tactic = lyr.get("tactic", "unknown")
+                if tactic not in by_tactic:
+                    by_tactic[tactic] = []
+                entry = {
+                    "id":         lyr.get("technique_id", ""),
+                    "name":       lyr.get("technique_name", ""),
+                    "confidence": lyr.get("confidence", 0),
+                    "source":     lyr.get("source", ""),
+                }
+                ids = [e["id"] for e in by_tactic[tactic]]
+                if entry["id"] not in ids:
+                    by_tactic[tactic].append(entry)
+        return by_tactic

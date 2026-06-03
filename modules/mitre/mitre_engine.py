@@ -1,155 +1,204 @@
 """
-mitre_engine.py — Hybrid MITRE ATT&CK Classification Engine
--------------------------------------------------------------
-Orchestrates three resolution layers in priority order:
+mitre_engine.py  —  Hybrid 3-Layer MITRE ATT&CK Engine
+Replaces the simple hardcoded MitreMapper with a production-grade system.
 
-  Layer 1 — Rule-Based Resolver   (confidence 0.85–0.95)
-  Layer 2 — STIX Dynamic Lookup   (confidence 0.60–0.75)
-  Layer 3 — ML Tactic Classifier  (confidence 0.50–0.70)
+Layer 1  rule_resolver   — deterministic, confidence 0.85–0.95
+Layer 2  stix_resolver   — semantic keyword search, confidence 0.60–0.75
+Layer 3  ml_classifier   — TF-IDF + RandomForest,  confidence 0.50–0.70
 
-Post-exploitation output is merged as a fourth enrichment source.
+Decision policy:
+  - Layer 1 wins if confidence ≥ 0.85
+  - Layer 2 used as fallback/enrichment
+  - Layer 3 only overrides when conf > current best + 0.10
+  - Post-exploit techniques always appended as extra evidence
+
+Usage (replaces the old MitreMapper):
+    from modules.mitre import MitreEngine
+    engine = MitreEngine()
+    mapped = engine.map_all(exploit_results, post_commands=["hashdump","sysinfo"])
+    chain  = engine.build_chain(mapped)
+    engine.save_heatmap(mapped, "reports/attack_layer.json")
+    engine.save_chain(chain,    "reports/attack_chain.json")
 """
 
-from modules.mitre.rule_resolver       import RuleResolver
-from modules.mitre.stix_resolver       import StixResolver
-from modules.mitre.ml_classifier       import MitreMLClassifier
-from modules.mitre.post_exploit_mapper import PostExploitMapper
+import json
+import os
+from datetime import datetime
 
-
-# Kill chain phase inference
-TACTIC_PHASES = {
-    "reconnaissance":        1,
-    "resource-development":  1,
-    "initial-access":        2,
-    "execution":             3,
-    "persistence":           4,
-    "privilege-escalation":  4,
-    "defense-evasion":       5,
-    "credential-access":     5,
-    "discovery":             6,
-    "lateral-movement":      7,
-    "collection":            8,
-    "command-and-control":   9,
-    "exfiltration":         10,
-    "impact":               11,
-}
+from modules.mitre.rule_resolver    import RuleResolver
+from modules.mitre.stix_resolver    import StixResolver
+from modules.mitre.ml_classifier    import MlClassifier
+from modules.mitre.chain_builder    import ChainBuilder
+from modules.mitre.heatmap_generator import HeatmapGenerator
 
 
 class MitreEngine:
 
-    def __init__(self):
-        print("\n[MitreEngine] Initializing hybrid classification engine...")
-        self.rule_resolver  = RuleResolver()
-        self.stix_resolver  = StixResolver()
-        self.ml_classifier  = MitreMLClassifier()
-        self.post_mapper    = PostExploitMapper()
-        print("[MitreEngine] Ready.\n")
+    def __init__(self, verbose: bool = True):
+        self.verbose = verbose
+        print("\n[MITRE Engine] Initialising 3-layer hybrid classifier...")
 
-    # -----------------------------------------------------------------------
-    # Main classify entry point
-    # -----------------------------------------------------------------------
+        self.rule_resolver = RuleResolver()
+        self.stix_resolver = StixResolver()
+        self.ml_classifier = MlClassifier()
+        self.chain_builder = ChainBuilder()
+        self.heatmap_gen   = HeatmapGenerator()
 
-    def classify(self, context: dict) -> dict:
+        print("[MITRE Engine] Ready.\n")
+
+    # ── Primary interface ─────────────────────────────────────────────
+
+    def map_all(self, exploit_results: list[dict],
+                post_commands: list[str] | None = None) -> list[dict]:
         """
-        Classify a single exploitation finding.
+        Classify every exploit result through all three layers.
 
-        context keys expected:
-          exploit, port, service, cve, payload_type,
-          edb_title, post_output (dict from PostExploitModule),
-          host
+        Parameters
+        ----------
+        exploit_results : list of dicts from ExploiterModule / VulnMapper
+        post_commands   : Meterpreter session commands (e.g. ["sysinfo", "hashdump"])
 
-        Returns a result dict with:
-          techniques, tactic, confidence, source,
-          extra_techniques, attack_phase, context
+        Returns
+        -------
+        Enriched list — each item gains a "layers" key (list of technique dicts)
+        and a "primary_mitre" key (the winning result).
         """
-        result = None
+        print(f"[MITRE Engine] Classifying {len(exploit_results)} result(s)...")
+        all_mapped = []
 
-        # --- Layer 1: Rules (fastest, most reliable) ---
-        rule_result = self.rule_resolver.resolve(context)
-        if rule_result and rule_result["confidence"] >= 0.85:
-            result = rule_result
-
-        # --- Layer 2: STIX (if rules gave low confidence or no match) ---
-        if not result or result["confidence"] < 0.85:
-            stix_result = self.stix_resolver.resolve(context)
-            if stix_result:
-                if not result or stix_result["confidence"] > result["confidence"]:
-                    result = stix_result
-
-        # --- Layer 3: ML (enrichment / fallback) ---
-        ml_result = self.ml_classifier.predict(context)
-        if ml_result:
-            if not result:
-                result = ml_result
-            elif ml_result["confidence"] > result["confidence"] + 0.10:
-                # ML wins only if notably more confident
-                result = ml_result
-
-        # --- Fallback: unknown ---
-        if not result:
-            result = {
-                "techniques": [{"id": "T1000", "name": "Unknown Technique"}],
-                "tactic":     "unknown",
-                "confidence": 0.0,
-                "source":     "none"
-            }
-
-        # --- Post-exploitation enrichment ---
-        post_output      = context.get("post_output", {})
-        extra_techniques = self.post_mapper.map(post_output)
-
-        # --- Finalize ---
-        tactic       = result.get("tactic", "unknown").lower().replace(" ", "-")
-        attack_phase = TACTIC_PHASES.get(tactic, 0)
-
-        result["extra_techniques"] = extra_techniques
-        result["attack_phase"]     = attack_phase
-        result["context"]          = context
-
-        self._print_result(context, result)
-        return result
-
-    # -----------------------------------------------------------------------
-    # Batch classify (replaces old MitreMapper.map_techniques)
-    # -----------------------------------------------------------------------
-
-    def map_techniques(self, exploit_results: list) -> list:
-        """
-        Drop-in replacement for the old MitreMapper.map_techniques().
-        Accepts the exploit_results list from ExploiterModule and returns
-        the same list with a 'mitre' key added to each entry.
-        """
-        print("\n[MitreEngine] Starting ATT&CK classification...")
-        mapped = []
         for result in exploit_results:
-            context = {
-                "exploit":       result.get("exploit", ""),
-                "port":          result.get("port"),
-                "service":       result.get("service", ""),
-                "cve":           result.get("cve", ""),
-                "payload_type":  "meterpreter" if result.get("success") else "",
-                "edb_title":     result.get("edb_title", ""),
-                "post_output":   result.get("post_data", {}),
-                "host":          result.get("host", "")
-            }
-            classified    = self.classify(context)
-            result["mitre"] = classified
-            mapped.append(result)
-        return mapped
+            context = self._build_context(result, post_commands or [])
+            mapped  = self._classify(context)
 
-    # -----------------------------------------------------------------------
+            result["mitre"]         = mapped["primary"]
+            result["layers"]        = mapped["layers"]
+            result["attack_chain"]  = None   # filled later by build_chain
+            all_mapped.append(result)
 
-    def _print_result(self, context: dict, result: dict):
-        host   = context.get("host", "?")
-        port   = context.get("port", "?")
-        source = result.get("source", "?")
-        conf   = result.get("confidence", 0)
-        tactic = result.get("tactic", "unknown")
+            self._print_result(result)
 
-        print(f"  [+] {host}:{port}")
-        print(f"      Tactic     : {tactic}")
-        print(f"      Source     : {source} (confidence={conf})")
-        for tech in result.get("techniques", []):
-            print(f"      Technique  : {tech['id']} — {tech.get('name', '')}")
-        for tech in result.get("extra_techniques", []):
-            print(f"      Post-Expl  : {tech['id']} — {tech.get('name', '')}")
+        # Post-exploit enrichment (session-level, not per exploit)
+        if post_commands:
+            post_techs = self.rule_resolver.resolve_post_commands(post_commands)
+            for tech in post_techs:
+                all_mapped.append({
+                    "host":          all_mapped[0]["host"] if all_mapped else "",
+                    "port":          0,
+                    "exploit":       "post_exploit_session",
+                    "success":       True,
+                    "mitre":         tech,
+                    "layers":        [tech],
+                    "attack_chain":  None,
+                    "_is_post":      True,
+                })
+
+        return all_mapped
+
+    def build_chain(self, mapped_results: list[dict]) -> dict:
+        """Reconstruct kill-chain from mapped results."""
+        return self.chain_builder.build(mapped_results)
+
+    def save_heatmap(self, mapped_results: list[dict], path: str):
+        layer = self.heatmap_gen.generate(mapped_results)
+        self.heatmap_gen.save(layer, path)
+        return layer
+
+    def save_chain(self, chain: dict, path: str):
+        os.makedirs(os.path.dirname(path) if os.path.dirname(path) else ".", exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "generated":    datetime.now().isoformat(),
+                "framework":    "MITRE ATT&CK v14",
+                "attack_chain": chain,
+            }, f, indent=2, ensure_ascii=False)
+        print(f"  [Chain] Saved → {path}")
+
+    # ── Drop-in replacement for old MitreMapper.map_techniques() ─────
+
+    def map_techniques(self, exploit_results: list[dict]) -> list[dict]:
+        """Backward-compatible wrapper (same signature as old MitreMapper)."""
+        return self.map_all(exploit_results)
+
+    # ── Classification logic ──────────────────────────────────────────
+
+    def _classify(self, context: dict) -> dict:
+        layers = []
+
+        # Layer 1
+        r1 = self.rule_resolver.resolve(context)
+        if r1:
+            layers.append(r1)
+
+        # Layer 2
+        r2 = self.stix_resolver.resolve(context)
+        if r2:
+            layers.append(r2)
+
+        # Layer 3
+        r3 = self.ml_classifier.predict(context)
+        if r3:
+            layers.append(r3)
+
+        # Decision policy
+        primary = self._pick_best(r1, r2, r3)
+
+        return {"primary": primary, "layers": layers}
+
+    @staticmethod
+    def _pick_best(r1, r2, r3) -> dict:
+        """
+        Confidence weighting:
+          Rule = 0.85–0.95  (always wins above 0.85)
+          STIX = 0.60–0.75  (fallback)
+          ML   = 0.50–0.70  (only wins if > current + 0.10)
+        """
+        best = None
+
+        for candidate in [r1, r2, r3]:
+            if candidate is None:
+                continue
+            if best is None:
+                best = candidate
+                continue
+            diff = candidate["confidence"] - best["confidence"]
+            if diff > 0.10:
+                best = candidate
+
+        return best or {
+            "technique_id":   "T1190",
+            "technique_name": "Exploit Public-Facing Application",
+            "tactic":         "initial-access",
+            "confidence":     0.50,
+            "source":         "default",
+        }
+
+    @staticmethod
+    def _build_context(result: dict, post_commands: list[str]) -> dict:
+        return {
+            "exploit":       result.get("exploit", ""),
+            "service":       result.get("service", ""),
+            "cve":           result.get("cve", ""),
+            "edb_title":     result.get("edb_title", ""),
+            "product":       result.get("product", ""),
+            "version":       result.get("version", ""),
+            "host":          result.get("host", ""),
+            "port":          result.get("port", 0),
+            "post_commands": post_commands,
+        }
+
+    def _print_result(self, result: dict):
+        if not self.verbose:
+            return
+        p  = result.get("mitre", {})
+        ls = result.get("layers", [])
+        print(f"  [+] {result.get('host')}:{result.get('port')}  "
+              f"→  [{p.get('source','?')}]  "
+              f"{p.get('tactic','?')}  |  "
+              f"{p.get('technique_id','?')} {p.get('technique_name','?')}  "
+              f"(conf={p.get('confidence',0):.0%})")
+        if len(ls) > 1:
+            for l in ls[1:]:
+                print(f"       └ alt [{l.get('source','?')}] "
+                      f"{l.get('technique_id','?')} "
+                      f"{l.get('technique_name','?')} "
+                      f"({l.get('confidence',0):.0%})")

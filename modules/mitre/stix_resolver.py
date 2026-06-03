@@ -1,154 +1,160 @@
 """
-stix_resolver.py — Layer 2 of the Hybrid MITRE Engine
-------------------------------------------------------
-Dynamic lookup against the MITRE ATT&CK STIX dataset (local JSON cache).
-
-On first run: downloads enterprise-attack.json from MITRE's GitHub.
-After that:   reads from data/enterprise-attack.json (offline).
-
+stix_resolver.py  —  Layer 2: STIX Semantic Keyword Lookup
 Confidence: 0.60 – 0.75
+
+Builds an inverted keyword index from enterprise-attack.json.
+If the file is missing, auto-downloads from MITRE CTI on first use.
 """
 
 import json
-import re
 import os
-from pathlib import Path
-from functools import lru_cache
+import re
+from collections import defaultdict
 
-STIX_URL = (
+STIX_PATH = "data/enterprise-attack.json"
+STIX_URL  = (
     "https://raw.githubusercontent.com/mitre/cti/master/"
     "enterprise-attack/enterprise-attack.json"
 )
-
-STIX_PATH = Path("data/enterprise-attack.json")
 
 
 class StixResolver:
 
     def __init__(self):
-        self.ready = False
-        self.techniques = []
-        self.index: dict[str, list[str]] = {}  # word → [technique_id, ...]
+        self._index: dict[str, list[dict]] = defaultdict(list)   # word → [technique, …]
+        self._loaded = False
         self._load()
 
-    # -----------------------------------------------------------------------
-    # Load / download
-    # -----------------------------------------------------------------------
-
-    def _load(self):
-        if not STIX_PATH.exists():
-            print("  [StixResolver] enterprise-attack.json not found.")
-            print(f"  [StixResolver] Downloading from MITRE CTI...")
-            self._download()
-
-        if STIX_PATH.exists():
-            try:
-                data = json.loads(STIX_PATH.read_text(encoding="utf-8"))
-                self.techniques = [
-                    obj for obj in data.get("objects", [])
-                    if obj.get("type") == "attack-pattern"
-                    and not obj.get("revoked", False)
-                    and not obj.get("x_mitre_deprecated", False)
-                ]
-                self._build_index()
-                self.ready = True
-                print(f"  [StixResolver] Loaded {len(self.techniques)} techniques.")
-            except Exception as e:
-                print(f"  [StixResolver] Failed to parse STIX data: {e}")
-        else:
-            print("  [StixResolver] Offline mode — STIX lookup disabled.")
-
-    def _download(self):
-        try:
-            import urllib.request
-            os.makedirs("data", exist_ok=True)
-            urllib.request.urlretrieve(STIX_URL, STIX_PATH)
-            print("  [StixResolver] Download complete.")
-        except Exception as e:
-            print(f"  [StixResolver] Download failed: {e}")
-            print("  [StixResolver] Manual download:")
-            print(f"    wget {STIX_URL} -O {STIX_PATH}")
-
-    # -----------------------------------------------------------------------
-    # Index build
-    # -----------------------------------------------------------------------
-
-    def _build_index(self):
-        """Build a word → [technique_id] inverted index for fast lookup."""
-        for tech in self.techniques:
-            ext_refs = tech.get("external_references", [])
-            if not ext_refs:
-                continue
-            tid  = ext_refs[0].get("external_id", "")
-            name = tech.get("name", "").lower()
-            desc = tech.get("description", "").lower()[:500]
-            text = name + " " + desc
-            # Index meaningful words (≥4 chars)
-            for word in set(re.findall(r'\b[a-z]{4,}\b', text)):
-                self.index.setdefault(word, []).append(tid)
-
-    # -----------------------------------------------------------------------
-    # Resolve
-    # -----------------------------------------------------------------------
-
-    @lru_cache(maxsize=512)
-    def _cached_resolve(self, query: str) -> list:
-        """Returns list of (technique_id, hit_count) sorted by relevance."""
-        words  = set(re.findall(r'\b[a-z]{4,}\b', query.lower()))
-        scores = {}
-        for word in words:
-            for tid in self.index.get(word, []):
-                scores[tid] = scores.get(tid, 0) + 1
-        return sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+    # ── Public ────────────────────────────────────────────────────────
 
     def resolve(self, context: dict) -> dict | None:
-        if not self.ready:
+        if not self._loaded:
             return None
 
-        # Build a query string from all available context
-        parts = [
-            context.get("exploit", ""),
-            context.get("service", ""),
-            context.get("cve", ""),
-            context.get("payload_type", ""),
-            context.get("edb_title", ""),
-        ]
-        query = " ".join(p for p in parts if p).strip()
-        if not query:
+        text = self._context_to_text(context)
+        if not text:
             return None
 
-        top_matches = self._cached_resolve(query)
-        if not top_matches:
+        scores: dict[str, float] = defaultdict(float)
+        hits:   dict[str, dict]  = {}
+
+        for word in self._tokenize(text):
+            for tech in self._index.get(word, []):
+                tid = tech["technique_id"]
+                scores[tid] += tech["idf"]
+                hits[tid]    = tech
+
+        if not scores:
             return None
 
-        techniques = []
-        for tid, hit_count in top_matches[:3]:
-            tech = next(
-                (t for t in self.techniques
-                 if t.get("external_references", [{}])[0].get("external_id") == tid),
-                None
-            )
-            if not tech:
-                continue
-            phases = tech.get("kill_chain_phases", [])
-            tactic = phases[0].get("phase_name", "unknown") if phases else "unknown"
-            techniques.append({
-                "id":     tid,
-                "name":   tech.get("name", tid),
-                "tactic": tactic,
-                "hits":   hit_count
-            })
+        best_id = max(scores, key=lambda k: scores[k])
+        best    = hits[best_id]
 
-        if not techniques:
-            return None
-
-        # Confidence based on hit strength (capped at 0.75)
-        top_hits    = top_matches[0][1]
-        confidence  = min(0.75, 0.45 + top_hits * 0.05)
+        # Normalise score → 0.60–0.75 confidence band
+        raw_score  = scores[best_id]
+        confidence = min(0.75, 0.60 + raw_score * 0.02)
 
         return {
-            "techniques": techniques,
-            "tactic":     techniques[0]["tactic"],
-            "confidence": round(confidence, 2),
-            "source":     "stix"
+            "technique_id":   best["technique_id"],
+            "technique_name": best["technique_name"],
+            "tactic":         best["tactic"],
+            "confidence":     round(confidence, 3),
+            "source":         "stix",
         }
+
+    # ── Internal ──────────────────────────────────────────────────────
+
+    def _load(self):
+        path = self._ensure_file()
+        if not path:
+            print("  [STIX] enterprise-attack.json not available — layer 2 disabled.")
+            return
+
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            techniques = [
+                obj for obj in data.get("objects", [])
+                if obj.get("type") == "attack-pattern"
+                and not obj.get("revoked", False)
+                and not obj.get("x_mitre_deprecated", False)
+            ]
+
+            # Build index
+            all_words: dict[str, int] = defaultdict(int)  # word → doc_freq
+
+            tech_docs: list[tuple[dict, set]] = []
+            for obj in techniques:
+                tid   = next((r["external_id"] for r in obj.get("external_references", [])
+                               if r.get("source_name") == "mitre-attack" and
+                               r.get("external_id", "").startswith("T")), None)
+                if not tid:
+                    continue
+
+                tactic_phases = obj.get("kill_chain_phases", [])
+                tactic = tactic_phases[0]["phase_name"] if tactic_phases else "unknown"
+
+                combined = f"{obj.get('name', '')} {obj.get('description', '')}"
+                words    = set(self._tokenize(combined))
+
+                for w in words:
+                    all_words[w] += 1
+
+                tech_docs.append(({
+                    "technique_id":   tid,
+                    "technique_name": obj.get("name", ""),
+                    "tactic":         tactic,
+                }, words))
+
+            n_docs = len(tech_docs)
+            import math
+            for tech_info, words in tech_docs:
+                for w in words:
+                    idf = math.log(n_docs / (1 + all_words[w]))
+                    self._index[w].append({**tech_info, "idf": idf})
+
+            self._loaded = True
+            print(f"  [STIX] Loaded {len(tech_docs)} techniques → index built.")
+
+        except Exception as e:
+            print(f"  [STIX] Failed to load: {e}")
+
+    def _ensure_file(self) -> str | None:
+        if os.path.exists(STIX_PATH):
+            return STIX_PATH
+
+        os.makedirs(os.path.dirname(STIX_PATH), exist_ok=True)
+        print(f"  [STIX] enterprise-attack.json not found — downloading from MITRE CTI...")
+
+        try:
+            import urllib.request
+            urllib.request.urlretrieve(STIX_URL, STIX_PATH)
+            print(f"  [STIX] Downloaded → {STIX_PATH}")
+            return STIX_PATH
+        except Exception as e:
+            print(f"  [STIX] Download failed: {e}")
+            print(f"  [STIX] Manually place enterprise-attack.json in data/")
+            return None
+
+    @staticmethod
+    def _context_to_text(ctx: dict) -> str:
+        parts = [
+            ctx.get("exploit", ""),
+            ctx.get("service", ""),
+            ctx.get("cve", ""),
+            ctx.get("edb_title", ""),
+            ctx.get("product", ""),
+            ctx.get("version", ""),
+        ]
+        return " ".join(p for p in parts if p)
+
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        text = text.lower()
+        text = re.sub(r"[/_\-\.0-9]", " ", text)
+        words = text.split()
+        stopwords = {"the", "a", "an", "and", "or", "of", "to", "in", "for",
+                     "on", "with", "via", "from", "by", "at", "is", "this",
+                     "that", "be", "are", "was", "as", "it", "its", "used"}
+        return [w for w in words if len(w) > 2 and w not in stopwords]

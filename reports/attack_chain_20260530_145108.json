@@ -1,0 +1,81 @@
+{
+  "2": {
+    "phase_name": "Initial Access",
+    "tactic": "initial-access",
+    "techniques": [
+      {
+        "id": "T1190",
+        "name": "FTP exploit"
+      },
+      {
+        "id": "T1078",
+        "name": "Telnet valid accounts"
+      },
+      {
+        "id": "T1110",
+        "name": "Brute Force"
+      },
+      {
+        "id": "T1083",
+        "name": "File and Directory Discovery"
+      }
+    ],
+    "hosts": [
+      "192.168.187.133"
+    ],
+    "confidence": 0.95,
+    "source": "rule_exact"
+  },
+  "5": {
+    "phase_name": "Defense Evasion / Credential Access",
+    "tactic": "credential-access",
+    "techniques": [
+      {
+        "id": "T1110",
+        "name": "Brute Force"
+      },
+      {
+        "id": "T1021.004",
+        "name": "SSH"
+      },
+      {
+        "id": "T1041",
+        "name": "Exfiltration Over C2 Channel"
+      }
+    ],
+    "hosts": [
+      "192.168.187.133"
+    ],
+    "confidence": 0.95,
+    "source": "rule_exact"
+  },
+  "6": {
+    "phase_name": "Discovery",
+    "tactic": "discovery",
+    "techniques": [
+      {
+        "id": "T1135",
+        "name": "Network Share Discovery",
+        "tactic": "discovery",
+        "hits": 3
+      },
+      {
+        "id": "T1021.002",
+        "name": "SMB/Windows Admin Shares",
+        "tactic": "lateral-movement",
+        "hits": 3
+      },
+      {
+        "id": "T1047",
+        "name": "Windows Management Instrumentation",
+        "tactic": "execution",
+        "hits": 2
+      }
+    ],
+    "hosts": [
+      "192.168.187.133"
+    ],
+    "confidence": 0.6,
+    "source": "stix"
+  }
+}

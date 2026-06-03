@@ -1,90 +1,137 @@
 """
-ml_classifier.py — Layer 3 of the Hybrid MITRE Engine
--------------------------------------------------------
-TF-IDF + Random Forest classifier for MITRE tactic prediction.
+ml_classifier.py  —  Layer 3: TF-IDF + RandomForest MITRE Classifier
+Confidence: 0.50 – 0.70
 
-Predicts the most likely ATT&CK tactic from:
-  - exploit name, service, CVE, port, payload type, post-exploit commands
-
-Confidence: 0.50 – 0.70 (lowest in the stack — used as fallback enrichment)
-
-Training: run train_mitre_model.py to generate models/mitre_classifier.pkl
+Loads the trained model from models/mitre_classifier.pkl if it exists.
+Falls back to a lightweight in-memory rule approximation if not.
 """
 
 import os
-import re
 import pickle
-from pathlib import Path
+import re
+
+MODEL_PATH = "models/mitre_classifier.pkl"
+
+# ── Lightweight fallback (no model file needed) ───────────────────────
+FALLBACK_KEYWORDS = [
+    (["vsftpd", "backdoor", "irc", "unreal", "distcc", "drupal", "struts",
+      "joomla", "phishing", "smtp"],                   "initial-access",        0.67),
+    (["smb", "samba", "eternalblue", "ms17", "rdp", "bluekeep", "psexec",
+      "lateral", "pivot"],                             "lateral-movement",      0.67),
+    (["brute", "hydra", "credential", "password", "hashdump", "ntlm", "dump"],
+                                                       "credential-access",     0.67),
+    (["getsystem", "privesc", "sudo", "privilege", "escalat", "local exploit"],
+                                                       "privilege-escalation",  0.65),
+    (["sysinfo", "getuid", "discovery", "enum", "arp", "route", "ps ",
+      "netstat", "whoami"],                            "discovery",             0.65),
+    (["meterpreter", "shell", "powershell", "cmd", "exec", "interpreter",
+      "bash", "jenkins"],                              "execution",             0.64),
+    (["persist", "cron", "registry", "startup", "autorun", "scheduled"],
+                                                       "persistence",           0.63),
+    (["exfil", "upload", "c2", "transfer", "download all"],
+                                                       "exfiltration",          0.62),
+    (["ransomware", "encrypt", "wiper", "destroy"],    "impact",                0.65),
+]
 
 
-class MitreMLClassifier:
+class MlClassifier:
 
     def __init__(self):
-        self.ready = False
-        model_path = Path("models/mitre_classifier.pkl")
-
-        if model_path.exists():
-            try:
-                with open(model_path, "rb") as f:
-                    data = pickle.load(f)
-                self.model          = data["model"]
-                self.vectorizer     = data["vectorizer"]
-                self.label_encoder  = data["label_encoder"]
-                self.ready          = True
-                print("  [MitreMLClassifier] Model loaded.")
-            except Exception as e:
-                print(f"  [MitreMLClassifier] Failed to load model: {e}")
-        else:
-            print("  [MitreMLClassifier] No model found — layer 3 disabled.")
-            print("  [MitreMLClassifier] Run: python train_mitre_model.py")
-
-    def _build_text(self, context: dict) -> str:
-        """Combine all context fields into one text string for TF-IDF."""
-        parts = [
-            context.get("exploit", ""),
-            context.get("service", ""),
-            context.get("cve", ""),
-            str(context.get("port", "")),
-            context.get("payload_type", ""),
-            context.get("edb_title", ""),
-            context.get("post_commands", ""),
-        ]
-        # Normalize: lower, replace slashes with spaces
-        text = " ".join(p for p in parts if p)
-        return re.sub(r'[/_\-]', ' ', text.lower())
+        self._model    = None
+        self._fe       = None
+        self._ready    = False
+        self._fallback = True
+        self._load()
 
     def predict(self, context: dict) -> dict | None:
-        if not self.ready:
+        text = self._context_text(context)
+        if not text:
             return None
 
-        text = self._build_text(context)
-        if not text.strip():
-            return None
+        if self._ready:
+            return self._model_predict(text, context)
+        else:
+            return self._fallback_predict(text)
+
+    # ── Internal ──────────────────────────────────────────────────────
+
+    def _load(self):
+        if not os.path.exists(MODEL_PATH):
+            print(f"  [ML] No model at {MODEL_PATH} — fallback keyword mode active.")
+            print(f"       Run:  python train_mitre_model.py   to train the classifier.")
+            return
 
         try:
-            vec       = self.vectorizer.transform([text])
-            pred_idx  = self.model.predict(vec)[0]
-            proba_arr = self.model.predict_proba(vec)[0]
-            confidence = float(proba_arr.max())
-            tactic     = self.label_encoder.inverse_transform([pred_idx])[0]
+            with open(MODEL_PATH, "rb") as f:
+                bundle = pickle.load(f)
 
-            # Retrieve top 2 tactics with their probabilities
-            top2_idx = proba_arr.argsort()[-2:][::-1]
-            top2 = [
-                {
-                    "tactic":     self.label_encoder.inverse_transform([i])[0],
-                    "confidence": round(float(proba_arr[i]), 2)
-                }
-                for i in top2_idx
-            ]
+            self._model    = bundle["model"]
+            self._fe       = bundle.get("feature_engineer") or bundle.get("vectorizer")
+            self._ready    = True
+            self._fallback = False
+            print(f"  [ML] Classifier loaded from {MODEL_PATH}.")
+        except Exception as e:
+            print(f"  [ML] Failed to load model: {e} — fallback active.")
+
+    def _model_predict(self, text: str, context: dict) -> dict | None:
+        try:
+            if hasattr(self._fe, "transform_one"):
+                X = self._fe.transform_one(context)
+            else:
+                X = self._fe.transform([text])
+
+            pred   = self._model.predict(X)[0]
+            proba  = self._model.predict_proba(X)[0]
+            conf   = float(proba.max())
+            label  = self._model.classes_[pred] if hasattr(pred, "__index__") else str(pred)
+
+            if hasattr(self._fe, "label_encoder"):
+                label = self._fe.label_encoder.inverse_transform([pred])[0]
 
             return {
-                "tactic":      tactic,
-                "confidence":  round(confidence, 2),
-                "top_tactics": top2,
-                "source":      "ml",
-                "techniques":  []   # Techniques filled by chain builder from STIX
+                "technique_id":   "T-ML",
+                "technique_name": f"ML predicted: {label}",
+                "tactic":         label,
+                "confidence":     round(min(0.70, max(0.50, conf)), 3),
+                "source":         "ml",
             }
         except Exception as e:
-            print(f"  [MitreMLClassifier] Prediction error: {e}")
-            return None
+            print(f"  [ML] Prediction error: {e}")
+            return self._fallback_predict(text)
+
+    def _fallback_predict(self, text: str) -> dict | None:
+        text_lower = text.lower()
+        text_lower = re.sub(r"[/_\-]", " ", text_lower)
+
+        best_tactic = None
+        best_conf   = 0.0
+        best_count  = 0
+
+        for keywords, tactic, base_conf in FALLBACK_KEYWORDS:
+            count = sum(1 for kw in keywords if kw in text_lower)
+            if count > best_count or (count == best_count and base_conf > best_conf):
+                best_count  = count
+                best_tactic = tactic
+                best_conf   = base_conf
+
+        if best_tactic and best_count > 0:
+            conf = min(0.70, best_conf + best_count * 0.02)
+            return {
+                "technique_id":   "T-KW",
+                "technique_name": f"Keyword inferred: {best_tactic}",
+                "tactic":         best_tactic,
+                "confidence":     round(conf, 3),
+                "source":         "ml_fallback",
+            }
+        return None
+
+    @staticmethod
+    def _context_text(ctx: dict) -> str:
+        parts = [
+            ctx.get("exploit", ""),
+            ctx.get("service", ""),
+            ctx.get("cve", ""),
+            ctx.get("edb_title", ""),
+            " ".join(ctx.get("post_commands", [])),
+        ]
+        return " ".join(p for p in parts if p)

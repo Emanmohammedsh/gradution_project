@@ -1,21 +1,21 @@
 /* ══════════════════════════════════════════════
-   main.js — Entry point, boots all views
+   main.js — Boot (v2)
    ══════════════════════════════════════════════ */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // 1. Build sidebar nav
   buildNav();
 
-  // 2. Render all views once
   renderDashboard();
   renderSession();
   renderHosts();
   renderVulns();
   renderExploits();
+  renderPostExploit();   // NEW
+  renderAI();            // NEW
   renderMitre();
+  renderChain();         // NEW
   renderRules();
   renderLogs();
 
-  // 3. Start on dashboard
   setView("dashboard");
 });

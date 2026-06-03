@@ -1,0 +1,339 @@
+{
+  "meta": {
+    "generated": "2026-06-01T08:01:35.976036",
+    "target": "192.168.1.100",
+    "live_hosts": [
+      "192.168.1.100"
+    ],
+    "framework": "Hybrid AI Red Team v2"
+  },
+  "scan_summary": {
+    "192.168.1.100": {
+      "os": "linux",
+      "ports": [
+        {
+          "port": 21,
+          "service": "ftp",
+          "product": "vsftpd",
+          "version": "2.3.4"
+        }
+      ]
+    }
+  },
+  "vulnerabilities": [
+    {
+      "host": "192.168.1.100",
+      "port": 21,
+      "service": "ftp",
+      "cve": "CVE-2011-2523",
+      "severity": "critical",
+      "cvss": 10.0,
+      "risk_score": 95,
+      "exploit": "exploit/unix/ftp/vsftpd_234_backdoor",
+      "title": "vsftpd backdoor"
+    }
+  ],
+  "exploit_results": [
+    {
+      "host": "192.168.1.100",
+      "port": 21,
+      "exploit": "exploit/unix/ftp/vsftpd_234_backdoor",
+      "success": true,
+      "mitre": {
+        "technique_id": "T1190",
+        "technique_name": "Exploit Public-Facing Application",
+        "tactic": "initial-access",
+        "confidence": 0.95,
+        "source": "rule_exact"
+      },
+      "layers": [
+        {
+          "technique_id": "T1190",
+          "technique_name": "Exploit Public-Facing Application",
+          "tactic": "initial-access",
+          "confidence": 0.95,
+          "source": "rule_exact"
+        },
+        {
+          "technique_id": "T1554",
+          "technique_name": "Compromise Host Software Binary",
+          "tactic": "persistence",
+          "confidence": 0.75,
+          "source": "stix"
+        },
+        {
+          "technique_id": "T-KW",
+          "technique_name": "Keyword inferred: discovery",
+          "tactic": "discovery",
+          "confidence": 0.7,
+          "source": "ml_fallback"
+        }
+      ]
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 445,
+      "exploit": "exploit/multi/samba/usermap_script",
+      "success": false,
+      "mitre": {
+        "technique_id": "T1210",
+        "technique_name": "Exploitation of Remote Services",
+        "tactic": "lateral-movement",
+        "confidence": 0.95,
+        "source": "rule_exact"
+      },
+      "layers": [
+        {
+          "technique_id": "T1210",
+          "technique_name": "Exploitation of Remote Services",
+          "tactic": "lateral-movement",
+          "confidence": 0.95,
+          "source": "rule_exact"
+        },
+        {
+          "technique_id": "T1110.001",
+          "technique_name": "Password Guessing",
+          "tactic": "credential-access",
+          "confidence": 0.75,
+          "source": "stix"
+        },
+        {
+          "technique_id": "T-KW",
+          "technique_name": "Keyword inferred: discovery",
+          "tactic": "discovery",
+          "confidence": 0.7,
+          "source": "ml_fallback"
+        }
+      ]
+    },
+    {
+      "host": "192.168.1.100",
+      "port": 22,
+      "exploit": "ssh",
+      "success": false,
+      "mitre": {
+        "technique_id": "T1082",
+        "technique_name": "System Information Discovery",
+        "tactic": "discovery",
+        "confidence": 0.95,
+        "source": "post_exploit"
+      },
+      "layers": [
+        {
+          "technique_id": "T1082",
+          "technique_name": "System Information Discovery",
+          "tactic": "discovery",
+          "confidence": 0.95,
+          "source": "post_exploit"
+        },
+        {
+          "technique_id": "T1110.001",
+          "technique_name": "Password Guessing",
+          "tactic": "credential-access",
+          "confidence": 0.75,
+          "source": "stix"
+        },
+        {
+          "technique_id": "T-KW",
+          "technique_name": "Keyword inferred: discovery",
+          "tactic": "discovery",
+          "confidence": 0.7,
+          "source": "ml_fallback"
+        }
+      ]
+    }
+  ],
+  "post_exploitation": {},
+  "attack_chain": {
+    "1": {
+      "phase_name": "Initial Access",
+      "tactic": "initial-access",
+      "techniques": [
+        {
+          "id": "T1190",
+          "name": "Exploit Public-Facing Application"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.95,
+      "source": "rule_exact"
+    },
+    "2": {
+      "phase_name": "Persistence",
+      "tactic": "persistence",
+      "techniques": [
+        {
+          "id": "T1554",
+          "name": "Compromise Host Software Binary"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.75,
+      "source": "stix"
+    },
+    "3": {
+      "phase_name": "Privilege Escalation",
+      "tactic": "privilege-escalation",
+      "techniques": [
+        {
+          "id": "T1068",
+          "name": "Exploitation for Privilege Escalation"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.93,
+      "source": "post_exploit"
+    },
+    "4": {
+      "phase_name": "Credential Access",
+      "tactic": "credential-access",
+      "techniques": [
+        {
+          "id": "T1110.001",
+          "name": "Password Guessing"
+        },
+        {
+          "id": "T1003",
+          "name": "OS Credential Dumping"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.85,
+      "source": "stix"
+    },
+    "5": {
+      "phase_name": "Discovery",
+      "tactic": "discovery",
+      "techniques": [
+        {
+          "id": "T-KW",
+          "name": "Keyword inferred: discovery"
+        },
+        {
+          "id": "T1082",
+          "name": "System Information Discovery"
+        },
+        {
+          "id": "T1033",
+          "name": "System Owner/User Discovery"
+        },
+        {
+          "id": "T1016",
+          "name": "System Network Config Discovery"
+        },
+        {
+          "id": "T1057",
+          "name": "Process Discovery"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.892,
+      "source": "ml_fallback"
+    },
+    "6": {
+      "phase_name": "Lateral Movement",
+      "tactic": "lateral-movement",
+      "techniques": [
+        {
+          "id": "T1210",
+          "name": "Exploitation of Remote Services"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.95,
+      "source": "rule_exact"
+    }
+  },
+  "mitre_summary": {
+    "initial-access": [
+      {
+        "id": "T1190",
+        "name": "Exploit Public-Facing Application",
+        "confidence": 0.95,
+        "source": "rule_exact"
+      }
+    ],
+    "persistence": [
+      {
+        "id": "T1554",
+        "name": "Compromise Host Software Binary",
+        "confidence": 0.75,
+        "source": "stix"
+      }
+    ],
+    "discovery": [
+      {
+        "id": "T-KW",
+        "name": "Keyword inferred: discovery",
+        "confidence": 0.7,
+        "source": "ml_fallback"
+      },
+      {
+        "id": "T1082",
+        "name": "System Information Discovery",
+        "confidence": 0.95,
+        "source": "post_exploit"
+      },
+      {
+        "id": "T1033",
+        "name": "System Owner/User Discovery",
+        "confidence": 0.95,
+        "source": "post_exploit"
+      },
+      {
+        "id": "T1016",
+        "name": "System Network Config Discovery",
+        "confidence": 0.93,
+        "source": "post_exploit"
+      },
+      {
+        "id": "T1057",
+        "name": "Process Discovery",
+        "confidence": 0.93,
+        "source": "post_exploit"
+      }
+    ],
+    "lateral-movement": [
+      {
+        "id": "T1210",
+        "name": "Exploitation of Remote Services",
+        "confidence": 0.95,
+        "source": "rule_exact"
+      }
+    ],
+    "credential-access": [
+      {
+        "id": "T1110.001",
+        "name": "Password Guessing",
+        "confidence": 0.75,
+        "source": "stix"
+      },
+      {
+        "id": "T1003",
+        "name": "OS Credential Dumping",
+        "confidence": 0.95,
+        "source": "post_exploit"
+      }
+    ],
+    "privilege-escalation": [
+      {
+        "id": "T1068",
+        "name": "Exploitation for Privilege Escalation",
+        "confidence": 0.93,
+        "source": "post_exploit"
+      }
+    ]
+  }
+}

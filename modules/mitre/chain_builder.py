@@ -1,98 +1,105 @@
 """
-chain_builder.py
-----------------
-Builds an ordered ATT&CK Kill Chain from all classified findings.
-Groups techniques by attack phase (1–11) and tactic.
+chain_builder.py  —  Kill-Chain Phase Grouper
+Groups all mapped techniques into ordered ATT&CK kill-chain phases.
 """
 
+PHASE_ORDER = [
+    "reconnaissance",
+    "resource-development",
+    "initial-access",
+    "execution",
+    "persistence",
+    "privilege-escalation",
+    "defense-evasion",
+    "credential-access",
+    "discovery",
+    "lateral-movement",
+    "collection",
+    "command-and-control",
+    "exfiltration",
+    "impact",
+]
 
-# ATT&CK tactic → kill chain phase number
-TACTIC_PHASES = {
-    "reconnaissance":        1,
-    "resource-development":  1,
-    "initial-access":        2,
-    "execution":             3,
-    "persistence":           4,
-    "privilege-escalation":  4,
-    "defense-evasion":       5,
-    "credential-access":     5,
-    "discovery":             6,
-    "lateral-movement":      7,
-    "collection":            8,
-    "command-and-control":   9,
-    "exfiltration":         10,
-    "impact":               11,
+PHASE_DISPLAY = {
+    "reconnaissance":      "Reconnaissance",
+    "resource-development":"Resource Development",
+    "initial-access":      "Initial Access",
+    "execution":           "Execution",
+    "persistence":         "Persistence",
+    "privilege-escalation":"Privilege Escalation",
+    "defense-evasion":     "Defense Evasion",
+    "credential-access":   "Credential Access",
+    "discovery":           "Discovery",
+    "lateral-movement":    "Lateral Movement",
+    "collection":          "Collection",
+    "command-and-control": "Command & Control",
+    "exfiltration":        "Exfiltration",
+    "impact":              "Impact",
 }
 
-PHASE_NAMES = {
-    1:  "Reconnaissance / Resource Development",
-    2:  "Initial Access",
-    3:  "Execution",
-    4:  "Persistence / Privilege Escalation",
-    5:  "Defense Evasion / Credential Access",
-    6:  "Discovery",
-    7:  "Lateral Movement",
-    8:  "Collection",
-    9:  "Command & Control",
-    10: "Exfiltration",
-    11: "Impact",
-}
 
+class ChainBuilder:
 
-class AttackChainBuilder:
-
-    def build(self, mitre_results: list) -> dict:
+    def build(self, mapped_results: list[dict]) -> dict:
         """
-        mitre_results: list of dicts from MitreEngine.classify()
-        Returns: ordered dict  { phase_number → { tactic, phase_name, techniques, hosts } }
+        Parameters
+        ----------
+        mapped_results : output of MitreEngine.map_all()  (list of per-finding dicts)
+
+        Returns
+        -------
+        Ordered dict keyed by phase index (1-based string),
+        each value contains tactic name, techniques list, hosts, confidence.
         """
-        chain = {}
+        # Collect all techniques grouped by tactic
+        by_tactic: dict[str, list] = {}
 
-        for result in mitre_results:
-            tactic  = result.get("tactic", "unknown").lower().replace(" ", "-")
-            phase   = TACTIC_PHASES.get(tactic, 0)
-            host    = result.get("context", {}).get("host", "unknown")
-
-            all_techniques = (
-                result.get("techniques", []) +
-                result.get("extra_techniques", [])
-            )
-
-            if phase not in chain:
-                chain[phase] = {
-                    "phase_name": PHASE_NAMES.get(phase, f"Phase {phase}"),
-                    "tactic":     tactic,
-                    "techniques": [],
-                    "hosts":      [],
-                    "confidence": result.get("confidence", 0.0),
-                    "source":     result.get("source", "unknown")
+        for result in mapped_results:
+            for layer_result in result.get("layers", []):
+                tactic = layer_result.get("tactic", "unknown").lower()
+                entry  = {
+                    "technique_id":   layer_result.get("technique_id", "T?"),
+                    "technique_name": layer_result.get("technique_name", "Unknown"),
+                    "confidence":     layer_result.get("confidence", 0.5),
+                    "source":         layer_result.get("source", "unknown"),
+                    "host":           result.get("host", ""),
                 }
+                # Skip ML pseudo-IDs (T-KW, T-ML) — not real ATT&CK IDs
+                if entry["technique_id"].startswith("T-"):
+                    continue
+                if tactic not in by_tactic:
+                    by_tactic[tactic] = []
+                # Deduplicate by technique_id
+                ids = [e["technique_id"] for e in by_tactic[tactic]]
+                if entry["technique_id"] not in ids:
+                    by_tactic[tactic].append(entry)
 
-            # Add techniques (deduplicate by ID)
-            existing_ids = {t["id"] for t in chain[phase]["techniques"]}
-            for tech in all_techniques:
-                if tech.get("id") and tech["id"] not in existing_ids:
-                    chain[phase]["techniques"].append(tech)
-                    existing_ids.add(tech["id"])
+        # Build ordered chain
+        chain = {}
+        phase_num = 1
 
-            if host not in chain[phase]["hosts"]:
-                chain[phase]["hosts"].append(host)
+        for phase_key in PHASE_ORDER:
+            if phase_key not in by_tactic:
+                continue
 
-            # Keep highest confidence per phase
-            if result.get("confidence", 0) > chain[phase]["confidence"]:
-                chain[phase]["confidence"] = result["confidence"]
-                chain[phase]["source"]     = result.get("source", "unknown")
+            entries = by_tactic[phase_key]
+            hosts   = list({e["host"] for e in entries if e["host"]})
+            avg_conf = round(
+                sum(e["confidence"] for e in entries) / len(entries), 3
+            ) if entries else 0.0
 
-        return dict(sorted(chain.items()))
+            chain[str(phase_num)] = {
+                "phase_name": PHASE_DISPLAY.get(phase_key, phase_key.replace("-", " ").title()),
+                "tactic":     phase_key,
+                "techniques": [
+                    {"id": e["technique_id"], "name": e["technique_name"]}
+                    for e in entries
+                ],
+                "hosts":      hosts,
+                "confidence": avg_conf,
+                "source":     entries[0]["source"] if entries else "unknown",
+            }
+            phase_num += 1
 
-    def print_chain(self, chain: dict):
-        print("\n" + "=" * 60)
-        print("  ATT&CK Kill Chain Summary")
-        print("=" * 60)
-        for phase, data in chain.items():
-            print(f"\n  Phase {phase}: {data['phase_name']}")
-            print(f"    Tactic     : {data['tactic']}")
-            print(f"    Confidence : {data['confidence']} [{data['source']}]")
-            print(f"    Hosts      : {', '.join(data['hosts'])}")
-            for tech in data["techniques"]:
-                print(f"    [{tech['id']}] {tech.get('name', '')}")
+        print(f"  [Chain] {len(chain)} phases reconstructed.")
+        return chain

@@ -1,0 +1,116 @@
+{
+  "generated": "2026-06-01T08:01:35.974189",
+  "framework": "MITRE ATT&CK v14",
+  "attack_chain": {
+    "1": {
+      "phase_name": "Initial Access",
+      "tactic": "initial-access",
+      "techniques": [
+        {
+          "id": "T1190",
+          "name": "Exploit Public-Facing Application"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.95,
+      "source": "rule_exact"
+    },
+    "2": {
+      "phase_name": "Persistence",
+      "tactic": "persistence",
+      "techniques": [
+        {
+          "id": "T1554",
+          "name": "Compromise Host Software Binary"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.75,
+      "source": "stix"
+    },
+    "3": {
+      "phase_name": "Privilege Escalation",
+      "tactic": "privilege-escalation",
+      "techniques": [
+        {
+          "id": "T1068",
+          "name": "Exploitation for Privilege Escalation"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.93,
+      "source": "post_exploit"
+    },
+    "4": {
+      "phase_name": "Credential Access",
+      "tactic": "credential-access",
+      "techniques": [
+        {
+          "id": "T1110.001",
+          "name": "Password Guessing"
+        },
+        {
+          "id": "T1003",
+          "name": "OS Credential Dumping"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.85,
+      "source": "stix"
+    },
+    "5": {
+      "phase_name": "Discovery",
+      "tactic": "discovery",
+      "techniques": [
+        {
+          "id": "T-KW",
+          "name": "Keyword inferred: discovery"
+        },
+        {
+          "id": "T1082",
+          "name": "System Information Discovery"
+        },
+        {
+          "id": "T1033",
+          "name": "System Owner/User Discovery"
+        },
+        {
+          "id": "T1016",
+          "name": "System Network Config Discovery"
+        },
+        {
+          "id": "T1057",
+          "name": "Process Discovery"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.892,
+      "source": "ml_fallback"
+    },
+    "6": {
+      "phase_name": "Lateral Movement",
+      "tactic": "lateral-movement",
+      "techniques": [
+        {
+          "id": "T1210",
+          "name": "Exploitation of Remote Services"
+        }
+      ],
+      "hosts": [
+        "192.168.1.100"
+      ],
+      "confidence": 0.95,
+      "source": "rule_exact"
+    }
+  }
+}

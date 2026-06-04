@@ -1,5 +1,5 @@
 """
-ml_classifier.py  —  Layer 3: TF-IDF + RandomForest MITRE Classifier
+.py  —  Layer 3: TF-IDF + RandomForest MITRE Classifier
 Confidence: 0.50 – 0.70
 
 Loads the trained model from models/mitre_classifier.pkl if it exists.
@@ -34,7 +34,8 @@ FALLBACK_KEYWORDS = [
 ]
 
 
-class MLClassifier:
+class MlClassifier:
+
     def __init__(self):
         self._model    = None
         self._fe       = None

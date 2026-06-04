@@ -1,0 +1,84 @@
+============================================================
+   PENETRATION TESTING REPORT
+   Hybrid AI Red Team Simulation Framework
+   UCAS Cyber Security Engineering 2026
+============================================================
+Date       : 2026-06-04 08:38:26
+Target     : 192.168.187.0/24
+Live Hosts : 6
+
+============================================================
+PHASE 1 — RECONNAISSANCE
+============================================================
+  [+] 192.168.187.1
+  [+] 192.168.187.132
+  [+] 192.168.187.133
+  [+] 192.168.187.137
+  [+] 192.168.187.2
+  [+] 192.168.187.254
+
+============================================================
+PHASE 2 — SCANNING & ENUMERATION
+============================================================
+
+  Host: 192.168.187.1  |  OS: unknown
+     9001/tcp  http                 Node.js Express framework 
+
+============================================================
+PHASE 3 — VULNERABILITY MAPPING
+============================================================
+
+  192.168.187.1:9001  |  http
+  CVE      : WEB-SCAN
+  Severity : LOW  |  CVSS: 4.0
+  Exploit  : web
+  Title    : HTTP service — fallback attack
+
+============================================================
+PHASE 4 — EXPLOITATION
+============================================================
+
+  192.168.187.1:9001  |  web
+  Status : FAILED
+
+============================================================
+PHASE 5 — POST-EXPLOITATION
+============================================================
+  No session established.
+
+============================================================
+PHASE 6 — MITRE ATT&CK MAPPING
+============================================================
+
+  192.168.187.1:9001  exploit: web
+  Primary  : [rule_service] T1190 — Exploit Public-Facing Application
+  Tactic   : initial-access
+  Conf     : 85%
+  All layers:
+    [rule_service] T1190 Exploit Public-Facing Application (85%)
+    [stix] T1499.002 Service Exhaustion Flood (75%)
+
+============================================================
+PHASE 7 — ATTACK CHAIN (KILL-CHAIN)
+============================================================
+
+  Phase 1: Initial Access  [initial-access]  conf=85%
+    T1190  Exploit Public-Facing Application
+
+  Phase 2: Impact  [impact]  conf=75%
+    T1499.002  Service Exhaustion Flood
+
+============================================================
+RECOMMENDATIONS
+============================================================
+  1. Patch all outdated software versions immediately (vsftpd, Samba, Apache).
+  2. Disable unnecessary services — close ports 21, 23, 6667 if not in use.
+  3. Enforce strong password policies and account lockout thresholds.
+  4. Segment the network — restrict lateral movement between hosts.
+  5. Deploy endpoint detection: monitor for hashdump, getsystem, arp sweep.
+  6. Enable IDS/IPS and correlate with MITRE ATT&CK navigator layer (attached).
+  7. Conduct periodic red team exercises against this attack chain.
+
+============================================================
+END OF REPORT
+============================================================

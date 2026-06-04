@@ -1,0 +1,36 @@
+{
+  "generated": "2026-06-04T08:38:26.271704",
+  "framework": "MITRE ATT&CK v14",
+  "attack_chain": {
+    "1": {
+      "phase_name": "Initial Access",
+      "tactic": "initial-access",
+      "techniques": [
+        {
+          "id": "T1190",
+          "name": "Exploit Public-Facing Application"
+        }
+      ],
+      "hosts": [
+        "192.168.187.1"
+      ],
+      "confidence": 0.85,
+      "source": "rule_service"
+    },
+    "2": {
+      "phase_name": "Impact",
+      "tactic": "impact",
+      "techniques": [
+        {
+          "id": "T1499.002",
+          "name": "Service Exhaustion Flood"
+        }
+      ],
+      "hosts": [
+        "192.168.187.1"
+      ],
+      "confidence": 0.75,
+      "source": "stix"
+    }
+  }
+}

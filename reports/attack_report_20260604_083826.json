@@ -1,0 +1,125 @@
+{
+  "meta": {
+    "generated": "2026-06-04T08:38:26.273424",
+    "target": "192.168.187.0/24",
+    "live_hosts": [
+      "192.168.187.1",
+      "192.168.187.132",
+      "192.168.187.133",
+      "192.168.187.137",
+      "192.168.187.2",
+      "192.168.187.254"
+    ],
+    "framework": "Hybrid AI Red Team v2"
+  },
+  "scan_summary": {
+    "192.168.187.1": {
+      "os": "unknown",
+      "ports": [
+        {
+          "port": 9001,
+          "service": "http",
+          "product": "Node.js Express framework",
+          "version": "",
+          "canonical_service": "http",
+          "cpe": ""
+        }
+      ]
+    }
+  },
+  "vulnerabilities": [
+    {
+      "host": "192.168.187.1",
+      "port": 9001,
+      "service": "http",
+      "cve": "WEB-SCAN",
+      "severity": "low",
+      "cvss": 4.0,
+      "risk_score": 30,
+      "exploit": "web",
+      "title": "HTTP service — fallback attack"
+    }
+  ],
+  "exploit_results": [
+    {
+      "host": "192.168.187.1",
+      "port": 9001,
+      "exploit": "web",
+      "success": false,
+      "mitre": {
+        "technique_id": "T1190",
+        "technique_name": "Exploit Public-Facing Application",
+        "tactic": "initial-access",
+        "confidence": 0.85,
+        "source": "rule_service"
+      },
+      "layers": [
+        {
+          "technique_id": "T1190",
+          "technique_name": "Exploit Public-Facing Application",
+          "tactic": "initial-access",
+          "confidence": 0.85,
+          "source": "rule_service"
+        },
+        {
+          "technique_id": "T1499.002",
+          "technique_name": "Service Exhaustion Flood",
+          "tactic": "impact",
+          "confidence": 0.75,
+          "source": "stix"
+        }
+      ]
+    }
+  ],
+  "post_exploitation": {},
+  "attack_chain": {
+    "1": {
+      "phase_name": "Initial Access",
+      "tactic": "initial-access",
+      "techniques": [
+        {
+          "id": "T1190",
+          "name": "Exploit Public-Facing Application"
+        }
+      ],
+      "hosts": [
+        "192.168.187.1"
+      ],
+      "confidence": 0.85,
+      "source": "rule_service"
+    },
+    "2": {
+      "phase_name": "Impact",
+      "tactic": "impact",
+      "techniques": [
+        {
+          "id": "T1499.002",
+          "name": "Service Exhaustion Flood"
+        }
+      ],
+      "hosts": [
+        "192.168.187.1"
+      ],
+      "confidence": 0.75,
+      "source": "stix"
+    }
+  },
+  "mitre_summary": {
+    "initial-access": [
+      {
+        "id": "T1190",
+        "name": "Exploit Public-Facing Application",
+        "confidence": 0.85,
+        "source": "rule_service"
+      }
+    ],
+    "impact": [
+      {
+        "id": "T1499.002",
+        "name": "Service Exhaustion Flood",
+        "confidence": 0.75,
+        "source": "stix"
+      }
+    ]
+  }
+}

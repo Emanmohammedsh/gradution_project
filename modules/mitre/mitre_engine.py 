@@ -27,7 +27,7 @@ from datetime import datetime
 
 from modules.mitre.rule_resolver    import RuleResolver
 from modules.mitre.stix_resolver    import StixResolver
-from modules.mitre.ml_classifier    import MLClassifier
+from modules.mitre.ml_classifier import MLClassifier
 from modules.mitre.chain_builder    import ChainBuilder
 from modules.mitre.heatmap_generator import HeatmapGenerator
 
@@ -40,7 +40,7 @@ class MitreEngine:
 
         self.rule_resolver = RuleResolver()
         self.stix_resolver = StixResolver()
-        self.ml_classifier = MLClassifier()
+        self.ml_classifier = MlClassifier()
         self.chain_builder = ChainBuilder()
         self.heatmap_gen   = HeatmapGenerator()
 

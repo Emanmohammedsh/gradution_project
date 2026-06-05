@@ -14,10 +14,18 @@ KEV_URL   = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vuln
 KEV_CACHE = "data/kev_catalog.json"
 
 
+# Embedded known exploited CVEs (CISA KEV catalog subset)
+EMBEDDED_KEV = {
+    "CVE-2017-0144","CVE-2019-0708","CVE-2021-44228","CVE-2021-26855",
+    "CVE-2020-1472","CVE-2021-34527","CVE-2022-26134","CVE-2018-13379",
+    "CVE-2010-2075","CVE-2011-2523","CVE-2007-2447","CVE-2020-5902",
+    "CVE-2014-6271","CVE-2017-11882","CVE-2019-11580","CVE-2021-21985",
+}
+
 class KevEngine:
 
     def __init__(self):
-        self._catalog: set[str] = set()
+        self._catalog: set[str] = set(EMBEDDED_KEV)
         self._load()
 
     def is_kev(self, cve: str) -> bool:

@@ -154,3 +154,75 @@ const LOGS = [
   "  [+] reports/attack_report_20260530.json",
   "  ✓ Pipeline complete",
 ];
+
+/* ══ Threat Intelligence Data ══ */
+const THREAT_INTEL = [
+  {cve:"CVE-2011-2523",cvss:10.0,epss:0.975,kev:true, kev_ransomware:false,vendor:"vsftpd project",product:"vsftpd",       severity:"critical",score:97.4,tier:"patch_immediately"},
+  {cve:"CVE-2007-2447",cvss:9.3, epss:0.970,kev:true, kev_ransomware:false,vendor:"samba",         product:"samba",        severity:"critical",score:96.0,tier:"patch_immediately"},
+  {cve:"CVE-2017-0144",cvss:9.8, epss:0.975,kev:true, kev_ransomware:true, vendor:"microsoft",     product:"windows smb",  severity:"critical",score:100, tier:"patch_immediately"},
+  {cve:"CVE-2010-2075",cvss:9.8, epss:0.965,kev:true, kev_ransomware:false,vendor:"unrealircd",    product:"unrealircd",   severity:"critical",score:98.1,tier:"patch_immediately"},
+  {cve:"CVE-2008-0166",cvss:7.8, epss:0.720,kev:false,kev_ransomware:false,vendor:"debian",        product:"openssl",      severity:"high",    score:66.0,tier:"patch_within_week"},
+  {cve:"CVE-2009-2446",cvss:8.5, epss:0.670,kev:false,kev_ransomware:false,vendor:"oracle",        product:"mysql server", severity:"high",    score:67.5,tier:"patch_within_week"},
+];
+
+/* ══ Adversary Profiles Data ══ */
+const ADVERSARY_PROFILES = [
+  {
+    name:"APT29",alias:"Cozy Bear",nation:"Russia",motivation:"espionage",
+    similarity:82,
+    tactics:["initial-access","execution","persistence","credential-access","lateral-movement","collection","exfiltration"],
+    techniques:["T1566","T1059","T1547","T1003","T1021","T1005","T1041"],
+    matched:["T1190","T1003","T1082","T1041"],
+    color:"#f43f5e",
+    desc:"Russian SVR-linked group known for stealthy long-term espionage campaigns.",
+  },
+  {
+    name:"APT28",alias:"Fancy Bear",nation:"Russia",motivation:"espionage/disruption",
+    similarity:74,
+    tactics:["initial-access","execution","credential-access","lateral-movement","exfiltration"],
+    techniques:["T1566","T1059","T1110","T1021","T1041"],
+    matched:["T1190","T1110","T1021","T1041"],
+    color:"#fb923c",
+    desc:"Russian GRU unit. Known for targeting government, military, and election infrastructure.",
+  },
+  {
+    name:"Lazarus",alias:"Hidden Cobra",nation:"North Korea",motivation:"financial/espionage",
+    similarity:61,
+    tactics:["initial-access","execution","persistence","lateral-movement","impact"],
+    techniques:["T1566","T1059","T1547","T1021","T1486"],
+    matched:["T1190","T1059","T1021"],
+    color:"#60a5fa",
+    desc:"North Korean group behind WannaCry ransomware and major financial heists.",
+  },
+  {
+    name:"FIN7",alias:"Carbanak",nation:"Ukraine (cybercrime)",motivation:"financial",
+    similarity:44,
+    tactics:["initial-access","execution","credential-access","collection"],
+    techniques:["T1566","T1059","T1003","T1005"],
+    matched:["T1003","T1059"],
+    color:"#34d399",
+    desc:"Financially motivated group targeting retail, restaurant, and hospitality sectors.",
+  },
+];
+
+/* ══ Attack Graph Data ══ */
+const GRAPH_DATA = {
+  nodes:[
+    {id:"ATTACKER",  type:"attacker", label:"Attacker",       x:50,  y:200, color:"#f43f5e"},
+    {id:"192.168.1.100:21",  type:"service",  label:"FTP :21",       x:220, y:80,  color:"#fb923c", service:"ftp",  risk:95},
+    {id:"192.168.1.100:445", type:"service",  label:"SMB :445",      x:220, y:200, color:"#fb923c", service:"smb",  risk:88},
+    {id:"192.168.1.100:80",  type:"service",  label:"HTTP :80",      x:220, y:320, color:"#fbbf24", service:"http", risk:84},
+    {id:"192.168.1.100",     type:"host",     label:"Metasploitable",x:400, y:200, color:"#a78bfa", risk:95},
+    {id:"CREDS",             type:"data",     label:"Credentials",   x:570, y:120, color:"#60a5fa"},
+    {id:"PIVOT",             type:"pivot",    label:"Pivot Point",   x:570, y:280, color:"#34d399"},
+  ],
+  edges:[
+    {from:"ATTACKER",             to:"192.168.1.100:21",  label:"CVE-2011-2523",  tactic:"initial-access",    color:"#f43f5e"},
+    {from:"ATTACKER",             to:"192.168.1.100:445", label:"CVE-2007-2447",  tactic:"lateral-movement",  color:"#fb923c"},
+    {from:"ATTACKER",             to:"192.168.1.100:80",  label:"CVE-2017-7679",  tactic:"initial-access",    color:"#fbbf24"},
+    {from:"192.168.1.100:21",     to:"192.168.1.100",     label:"T1059 Shell",    tactic:"execution",         color:"#a78bfa"},
+    {from:"192.168.1.100:445",    to:"192.168.1.100",     label:"T1210 Exploit",  tactic:"lateral-movement",  color:"#fb923c"},
+    {from:"192.168.1.100",        to:"CREDS",             label:"T1003 hashdump", tactic:"credential-access", color:"#60a5fa"},
+    {from:"192.168.1.100",        to:"PIVOT",             label:"T1016 network",  tactic:"discovery",         color:"#34d399"},
+  ],
+};

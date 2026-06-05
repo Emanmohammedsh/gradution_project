@@ -35,6 +35,7 @@ FALLBACK_KEYWORDS = [
 
 
 class MLClassifier:
+
     def __init__(self):
         self._model    = None
         self._fe       = None

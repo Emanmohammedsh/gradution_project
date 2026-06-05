@@ -14,6 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderAI();            // NEW
   renderMitre();
   renderChain();         // NEW
+  renderThreatIntel();    // NEW
+  renderAdversary();      // NEW
+  renderGraph();          // NEW
   renderRules();
   renderLogs();
 

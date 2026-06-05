@@ -2,7 +2,7 @@
 from modules.mitre.mitre_engine       import MitreEngine
 from modules.mitre.rule_resolver      import RuleResolver
 from modules.mitre.stix_resolver      import StixResolver
-from modules.mitre.ml_classifier      import MLClassifier
+from modules.mitre.ml_classifier      import MLClassifier as MLClassifier
 from modules.mitre.confidence_fusion  import ConfidenceFusion
 from modules.mitre.technique_merger   import TechniqueMerger
 from modules.mitre.coverage_analyzer  import CoverageAnalyzer

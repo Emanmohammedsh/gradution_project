@@ -8,11 +8,14 @@ const NAV_ITEMS = [
   { id:"hosts",       label:"Hosts",            icon:"⊡", group:"ANALYSIS"     },
   { id:"vulns",       label:"Vulnerabilities",  icon:"⚠", group:"ANALYSIS"     },
   { id:"exploits",    label:"Exploitation",     icon:"⚡", group:"ANALYSIS"     },
-  { id:"postexploit", label:"Post-Exploit",     icon:"🔓", group:"MITRE ENGINE", badge:"NEW" },
-  { id:"ai",          label:"AI Classifier",    icon:"◈", group:"MITRE ENGINE", badge:"NEW" },
+  { id:"postexploit", label:"Post-Exploit",     icon:"🔓", group:"MITRE ENGINE","INTELLIGENCE", badge:"NEW" },
+  { id:"ai",          label:"AI Classifier",    icon:"◈", group:"MITRE ENGINE","INTELLIGENCE", badge:"NEW" },
   { id:"mitre",       label:"MITRE ATT&CK",     icon:"⬢", group:"MITRE ENGINE" },
-  { id:"chain",       label:"Attack Chain",     icon:"⛓", group:"MITRE ENGINE", badge:"NEW" },
-  { id:"rules",       label:"Rule Trace",       icon:"≡", group:"SYSTEM"       },
+  { id:"chain",       label:"Attack Chain",     icon:"⛓", group:"MITRE ENGINE","INTELLIGENCE", badge:"NEW" },
+  { id:"threatintel",  label:"Threat Intel",     icon:"🛡", group:"INTELLIGENCE", badge:"NEW" },
+  { id:"adversary",    label:"Adversary Profiles",icon:"👤", group:"INTELLIGENCE", badge:"NEW" },
+  { id:"graph",        label:"Attack Graph",      icon:"⬡", group:"INTELLIGENCE", badge:"NEW" },
+  { id:"rules",        label:"Rule Trace",        icon:"≡", group:"SYSTEM"       },
   { id:"logs",        label:"Session Logs",     icon:"⌨", group:"SYSTEM"       },
 ];
 
@@ -24,6 +27,9 @@ const PAGE_TITLES = {
   mitre:"MITRE ATT&CK Mapping",
   chain:"Attack Chain Reconstruction",
   rules:"Rule Execution Trace",
+  threatintel:"Threat Intelligence — CVE · EPSS · CISA KEV",
+  adversary:"Adversary Profile Matching",
+  graph:"Attack Graph — Node/Edge Visualization",
   logs:"Session Logs",
 };
 

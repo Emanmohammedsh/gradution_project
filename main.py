@@ -20,17 +20,18 @@ import uuid
 from datetime import datetime
 
 # ── Core pipeline ─────────────────────────────────────────────────────
-from modules.recon             import ReconModule
-from modules.scanner           import ScannerModule
-from modules.vulnerability     import VulnMapperModule
-from modules.risk_engine       import RiskEngine
-from modules.exploiter         import ExploiterModule
-from modules.post_exploitation import PostExploitModule
-from modules.mitre             import MitreEngine
-from modules.ai                import AIPipeline           # Phase 9 ← was missing
-from modules.reporting         import ReportGenerator
+from modules.recon              import ReconModule
+from modules.scanner            import ScannerModule
+from modules.vulnerability      import VulnMapperModule
+from modules.risk_engine        import RiskEngine
+from modules.exploiter          import ExploiterModule
+from modules.post_exploitation  import PostExploitModule
+from modules.mitre              import MitreEngine
+from modules.mitre.coverage_analyzer  import CoverageAnalyzer
+from modules.mitre.technique_merger   import TechniqueMerger
+from modules.ai                 import AIPipeline
+from modules.reporting          import ReportGenerator
 from modules.social_engineering import SocialEngineeringModule
-from modules.ai.training_pipeline import TrainingPipeline
 
 # ── Threat Intelligence ───────────────────────────────────────────────
 from modules.threat_intelligence.threat_correlation import ThreatCorrelation
@@ -41,11 +42,8 @@ from modules.attack_graph.graph_builder   import GraphBuilder
 from modules.attack_graph.graph_analyzer  import GraphAnalyzer
 from modules.attack_graph.neo4j_connector import Neo4jConnector
 
-# ── Post-Exploit attack chain integration ────────────────────────────
+# ── Post-exploit chain integrator ────────────────────────────────────
 from modules.post_exploitation.attack_chain_integrator import AttackChainIntegrator
-
-# ── MITRE technique merger ────────────────────────────────────────────
-from modules.mitre.technique_merger import TechniqueMerger
 
 # ── Database persistence ──────────────────────────────────────────────
 from database.repository import (
@@ -82,21 +80,21 @@ def main():
         print("[-] No live hosts. Halting."); return
 
     # ── Phase 2: Scanning ─────────────────────────────────────────────
-    print(f"\n[Phase 2] Scanning & Service Enumeration")
+    print("\n[Phase 2] Scanning & Service Enumeration")
     scanner      = ScannerModule(live_hosts[0])
     scan_results = scanner.scan_target()
     if not scan_results or all(len(d["ports"]) == 0 for d in scan_results.values()):
         print("[-] No open ports found. Halting."); return
 
     # ── Phase 3: Vulnerability Mapping ────────────────────────────────
-    print(f"\n[Phase 3] Vulnerability Mapping (ExploitDB + Fallback)")
+    print("\n[Phase 3] Vulnerability Mapping (ExploitDB + Fallback)")
     vuln_mapper   = VulnMapperModule()
     vuln_findings = vuln_mapper.map_vulnerabilities(scan_results)
     if not vuln_findings:
         print("[-] No vulnerabilities mapped. Halting."); return
 
     # ── Phase 4: Threat Intelligence Enrichment ───────────────────────
-    print(f"\n[Phase 4] Threat Intelligence (CVSS · EPSS · KEV · Vendor)")
+    print("\n[Phase 4] Threat Intelligence (CVSS · EPSS · KEV · Vendor)")
     ti            = ThreatCorrelation()
     ts_scorer     = ThreatScore()
     vuln_findings = ti.enrich_all(vuln_findings)
@@ -104,100 +102,103 @@ def main():
         f["threat_score"]       = ts_scorer.calculate(f)
         f["threat_score_label"] = ts_scorer.label(f["threat_score"])
         if f.get("in_kev"):
-            f["severity"] = "critical"   # KEV → always critical
+            f["severity"] = "critical"
         print(f"  [TI] {f['host']}:{f['port']} | "
-              f"CVSS={f.get('cvss_live',f.get('cvss',0))} "
-              f"EPSS={f.get('epss',0):.3f} "
+              f"CVSS={f.get('cvss_live', f.get('cvss', 0))} "
+              f"EPSS={f.get('epss', 0):.3f} "
               f"KEV={'YES' if f.get('in_kev') else 'no'} "
               f"TScore={f['threat_score']}")
 
     # ── Phase 5: Risk Engine ──────────────────────────────────────────
-    print(f"\n[Phase 5] Risk Scoring (CVSS+EPSS+KEV → composite score)")
+    print("\n[Phase 5] Risk Scoring (CVSS+EPSS+KEV → composite score)")
     risk_engine        = RiskEngine()
     high_risk_findings = risk_engine.filter_by_risk(vuln_findings, threshold=30)
     if not high_risk_findings:
         print("[-] No high-risk targets. Halting."); return
 
     # ── Phase 6: Exploitation ─────────────────────────────────────────
-    print(f"\n[Phase 6] Exploitation (Rank → Probability → Execute)")
     exploiter       = ExploiterModule(lhost)
-    exploit_run     = exploiter.run_exploits(high_risk_findings)
-    exploit_results = exploit_run        # list[dict] — per-exploit results
-    log.info("Exploitation complete — %d attempts, success=%s",
-             len(exploit_results), exploit_run["success"])
+    exploit_results = exploiter.run_exploits(high_risk_findings)
+    log.info("Exploitation complete — %d attempts", len(exploit_results))
 
     # ── Phase 7: Post-Exploitation ────────────────────────────────────
-    print(f"\n[Phase 7] Post-Exploitation")
+    print("\n[Phase 7] Post-Exploitation")
     post_data     = {}
     post_commands = []
-    attack_chain  = {}   # will be built in Phase 8, updated in Phase 7
 
     for result in exploit_results:
         if result.get("success"):
-            pe            = PostExploitModule(lhost)
-            post_data     = pe.run_post_exploitation(
-                                result["host"], result["port"], result["exploit"])
+            pe        = PostExploitModule(lhost)
+            # attack_chain=None — integrator runs after Phase 8 (correct order)
+            post_data = pe.run_post_exploitation(
+                result["host"], result["port"],
+                result.get("exploit", ""),
+                attack_chain=None,
+            )
             post_commands = ["sysinfo", "getuid", "hashdump",
                              "arp", "ps", "getsystem"]
             break
 
     # ── Phase 8: Hybrid MITRE ATT&CK Engine ──────────────────────────
-    print(f"\n[Phase 8] MITRE ATT&CK (Rule · STIX · ML · ConfidenceFusion)")
+    print("\n[Phase 8] MITRE ATT&CK (Rule · STIX · ML · ConfidenceFusion)")
     mitre_engine   = MitreEngine()
     mapped_results = mitre_engine.map_all(exploit_results,
                                           post_commands=post_commands)
-    # TechniqueMerger — deduplicate across all hosts  ← Bug 4 fixed
-    merger         = TechniqueMerger()
-    merged_techs   = merger.merge(mapped_results)
-    log.info("Merged techniques: %d unique", len(merged_techs))
 
-    attack_chain   = mitre_engine.build_chain(mapped_results)
+    # TechniqueMerger — deduplicate across all hosts
+    merged_techs = TechniqueMerger().merge(mapped_results)
+    log.info("Merged unique techniques: %d", len(merged_techs))
 
-    # AttackChainIntegrator — enrich chain with post-exploit phases ← Bug 3 fixed
+    attack_chain = mitre_engine.build_chain(mapped_results)
+
+    # AttackChainIntegrator — enrich chain with post-exploit phases
     if post_data:
-        integrator   = AttackChainIntegrator()
-        attack_chain = integrator.integrate(post_data, attack_chain)
-        log.info("Attack chain extended with post-exploit phases: %d total",
-                 len(attack_chain))
+        attack_chain = AttackChainIntegrator().integrate(post_data, attack_chain)
+        log.info("Attack chain extended: %d phases", len(attack_chain))
 
     mitre_engine.save_heatmap(mapped_results, f"reports/attack_layer_{ts}.json")
     mitre_engine.save_chain(attack_chain,     f"reports/attack_chain_{ts}.json")
 
+    # MITRE coverage
+    coverage = CoverageAnalyzer().analyze(mapped_results)
+    print(f"  [Coverage] Tactics={len(coverage['covered_tactics'])} "
+          f"Techniques={coverage['technique_count']} "
+          f"Coverage={coverage['tactic_coverage_pct']}%")
+
     # ── Phase 9: AI Enrichment ────────────────────────────────────────
-    print(f"\n[Phase 9] AI Enrichment (MitrePredictor · XAI · Adversary · Recommendations)")
-    ai_pipeline = AIPipeline()                           # ← Bug 2 fixed
+    print("\n[Phase 9] AI Enrichment (MitrePredictor · XAI · Adversary · Recommendations)")
+    ai_pipeline = AIPipeline()
     ai_results  = ai_pipeline.enrich_findings(mapped_results, attack_chain)
 
     if ai_results.get("adversary_match"):
-        top_match = max(ai_results["adversary_match"],
-                        key=lambda x: x.get("similarity", 0), default={})
-        if top_match:
-            print(f"  [AI] Closest adversary: {top_match.get('name')} "
-                  f"similarity={top_match.get('similarity', 0):.0%}")
+        top = ai_results["adversary_match"][0]
+        print(f"  [AI] Closest adversary: {top.get('apt')} "
+              f"similarity={top.get('similarity', 0):.0%} "
+              f"matched={top.get('matched', [])}")
 
     if ai_results.get("recommendations"):
-        print(f"  [AI] {len(ai_results['recommendations'])} remediation recommendations generated")
+        print(f"  [AI] {len(ai_results['recommendations'])} remediation recommendations")
 
     # ── Phase 10: Attack Graph ────────────────────────────────────────
-    print(f"\n[Phase 10] Attack Graph (nodes · edges · centrality)")
-    graph_data    = GraphBuilder().build(exploit_results, attack_chain)
-    analyzer      = GraphAnalyzer()
-    graph_analysis = analyzer.analyze(graph_data)
-    print(f"  [Graph] Nodes={graph_analysis['total_nodes']} "
-          f"Edges={graph_analysis['total_edges']} "
+    print("\n[Phase 10] Attack Graph (nodes · edges · centrality)")
+    graph_data     = GraphBuilder().build(exploit_results, attack_chain)
+    # GraphAnalyzer.analyze() takes graph_data as argument
+    graph_analysis = GraphAnalyzer().analyze(graph_data)
+    print(f"  [Graph] Nodes={graph_analysis.get('total_nodes', 0)} "
+          f"Edges={graph_analysis.get('total_edges', 0)} "
           f"Top={graph_analysis.get('top_nodes', [])[:3]}")
 
-    # Neo4j — optional, controlled by env var
+    # Neo4j — optional, controlled by env var NEO4J_ENABLED
     if NEO4J_ENABLED:
         from config.settings import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
         neo = Neo4jConnector(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
         neo.push_graph(graph_data)
         neo.close()
     else:
-        print("  [Graph] Neo4j disabled (NEO4J_ENABLED=false) — using in-memory graph")
+        print("  [Graph] Neo4j disabled — using in-memory graph")
 
     # ── Phase 11: Social Engineering ─────────────────────────────────
-    print(f"\n[Phase 11] Social Engineering")
+    print("\n[Phase 11] Social Engineering")
     domain        = target.split("/")[0]
     open_services = list({p.get("service", "")
                           for d in scan_results.values()
@@ -206,21 +207,31 @@ def main():
     se_results = se_module.run_campaign({"open_services": open_services})
 
     # ── Phase 12: Report + DB ─────────────────────────────────────────
-    print(f"\n[Phase 12] Generating Reports & Saving to Database")
-    generator   = ReportGenerator()
-    report_file = generator.generate(
-        target          = target,
-        live_hosts      = live_hosts,
-        scan_results    = scan_results,
-        vuln_findings   = vuln_findings,
-        exploit_results = mapped_results,
-        post_data       = post_data,
-        attack_chain    = attack_chain,
-        graph_data      = graph_analysis,
-        session_id      = session_id,
-        ai_results      = ai_results,
-        formats         = ["json", "pdf"],
+    print("\n[Phase 12] Generating Reports & Saving to Database")
+
+    risk_summary = {
+        "total_findings":  len(vuln_findings),
+        "high_risk_count": len(high_risk_findings),
+        "kev_count":       sum(1 for f in vuln_findings if f.get("in_kev")),
+        "exploit_success": sum(1 for r in exploit_results if r.get("success")),
+        "risk_score":      max((f.get("risk_score", 0) for f in vuln_findings), default=0),
+        "attack_phases":   len(attack_chain),
+        "post_credentials": len(post_data.get("hashes", [])),
+        "lateral_targets": len(post_data.get("lateral_opps", [])),
+    }
+
+    # ReportGenerator.generate() — uses the corrected signature
+    generator = ReportGenerator()
+    report    = generator.generate(
+        scan_results   = scan_results,
+        findings       = vuln_findings,
+        mapped_results = mapped_results,
+        attack_chain   = attack_chain,
+        risk_summary   = risk_summary,
+        coverage       = coverage,
+        formats        = ["json"],
     )
+    report_file = report.get("saved_files", {}).get("json", "")
 
     # Database
     try:
@@ -241,7 +252,8 @@ def main():
     print(f"[+] Findings      : {len(vuln_findings)} vulnerabilities")
     print(f"[+] MITRE Techs   : {len(merged_techs)} unique techniques")
     print(f"[+] Chain Phases  : {len(attack_chain)}")
-    print(f"[+] Graph Nodes   : {graph_analysis['total_nodes']}")
+    print(f"[+] MITRE Coverage: {coverage['tactic_coverage_pct']}%")
+    print(f"[+] Graph Nodes   : {graph_analysis.get('total_nodes', 0)}")
     print(f"[+] AI Recs       : {len(ai_results.get('recommendations', []))}")
     print(f"[+] Report        : {report_file}")
     print(f"[+] ATT&CK Heatmap: reports/attack_layer_{ts}.json")

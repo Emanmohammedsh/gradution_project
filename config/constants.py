@@ -162,3 +162,44 @@ RESOLVER_ML   = "ml"
 CONFIDENCE_HIGH   = 0.85
 CONFIDENCE_MEDIUM = 0.60
 CONFIDENCE_LOW    = 0.35
+
+# ══════════════════════════════════════════════════════════════════════
+# Service Fallback Attack Map
+# (single source of truth — used by vuln_mapper + vuln_correlator)
+# ══════════════════════════════════════════════════════════════════════
+SERVICE_FALLBACK_MAP = {
+    "ftp":     {"exploit": "ftp",     "type": "hydra",      "severity": "medium"},
+    "ssh":     {"exploit": "ssh",     "type": "hydra",      "severity": "medium"},
+    "telnet":  {"exploit": "telnet",  "type": "hydra",      "severity": "high"},
+    "smtp":    {"exploit": "smtp",    "type": "hydra",      "severity": "medium"},
+    "mysql":   {"exploit": "mysql",   "type": "hydra",      "severity": "medium"},
+    "mssql":   {"exploit": "mssql",   "type": "hydra",      "severity": "medium"},
+    "rdp":     {"exploit": "rdp",     "type": "hydra",      "severity": "high"},
+    "vnc":     {"exploit": "vnc",     "type": "hydra",      "severity": "high"},
+    "http":    {"exploit": "web",     "type": "web",        "severity": "low"},
+    "https":   {"exploit": "web",     "type": "web",        "severity": "low"},
+    # ← الناقص في vuln_mapper الأصلي
+    "smb":             {"exploit": "exploit/multi/samba/usermap_script", "type": "metasploit", "severity": "critical"},
+    "microsoft-ds":    {"exploit": "exploit/multi/samba/usermap_script", "type": "metasploit", "severity": "critical"},
+    "netbios-ssn":     {"exploit": "exploit/multi/samba/usermap_script", "type": "metasploit", "severity": "critical"},
+    "irc":             {"exploit": "exploit/unix/irc/unreal_ircd_3281_backdoor", "type": "metasploit", "severity": "critical"},
+    "postgresql":      {"exploit": "postgresql", "type": "hydra", "severity": "medium"},
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Known CVE → CVSS table (authoritative — used by risk_engine & cvss_engine)
+# ══════════════════════════════════════════════════════════════════════
+KNOWN_CVSS_SCORES = {
+    "CVE-2011-2523": 10.0,  # vsftpd 2.3.4 backdoor
+    "CVE-2007-2447": 9.3,   # Samba usermap_script
+    "CVE-2017-0144": 9.3,   # MS17-010 EternalBlue
+    "CVE-2021-44228": 10.0, # Log4Shell
+    "CVE-2019-0708": 9.8,   # BlueKeep
+    "CVE-2014-6271": 9.8,   # Shellshock
+    "CVE-2010-2075": 9.8,   # UnrealIRCd backdoor
+    "CVE-2009-2446": 8.5,   # MySQL COM_FIELD_LIST
+    "CVE-2008-0166": 7.8,   # Debian OpenSSL weak key
+    "CVE-2017-7679": 9.8,   # Apache mod_mime
+    "BRUTE-FORCE":   5.0,
+    "WEB-SCAN":      4.0,
+}

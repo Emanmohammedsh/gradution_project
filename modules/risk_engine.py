@@ -1,105 +1,76 @@
+"""modules/risk_engine.py"""
+from config.constants import KNOWN_CVSS_SCORES
+
+
 class RiskEngine:
 
-    def __init__(self):
-        self.cvss_scores = {
-            "CVE-2011-2523": 10.0,
-            "CVE-2007-2447": 9.3,
-            "BRUTE-FORCE": 5.0,
-            "WEB-SCAN": 4.0
-        }
+    SERVICE_WEIGHTS = {
+        "ftp": 10, "smb": 10, "samba": 10, "microsoft-ds": 10,
+        "netbios-ssn": 10, "telnet": 9, "rdp": 9, "vnc": 9,
+        "ssh": 8, "mysql": 8, "mssql": 8, "postgresql": 7,
+        "http": 7, "https": 7, "irc": 8, "bindshell": 10,
+        "java-rmi": 7, "exec": 9, "login": 9,
+    }
 
-        # Server priority weights — higher = more attractive attack target
-        self.service_priority_weights = {
-            "ftp":    10,   # Often misconfigured, direct file access
-            "smb":    10,   # Lateral movement / ransomware vector
-            "samba":  10,   # Same as SMB
-            "telnet":  9,   # Plaintext credentials
-            "ssh":     8,   # Remote shell access
-            "http":    7,   # Web application attack surface
-            "https":   7,
-            "mysql":   8,   # Database — sensitive data
-            "mssql":   8,
-            "rdp":     9,   # Remote Desktop — direct GUI access
-            "smtp":    6,   # Social engineering relay
-            "pop3":    5,
-            "imap":    5,
-            "vnc":     9,   # Unencrypted remote desktop
-            "snmp":    6,   # Information disclosure
-        }
+    EXPOSED_PORTS = {21, 22, 23, 25, 80, 139, 445, 512, 513,
+                     1099, 1524, 3306, 5432, 6667, 8180}
 
-    def get_service_priority_bonus(self, finding):
-        """Return bonus points based on the service type."""
-        service = finding.get("service", "").lower()
-        product = finding.get("matched_key", "").lower()
+    def _cvss_score(self, cve: str, finding_cvss: float) -> float:
+        # Priority: cvss_live from TI → KNOWN table → finding cvss → 3.0
+        if finding_cvss and finding_cvss > 3.0:
+            return finding_cvss
+        known = KNOWN_CVSS_SCORES.get(cve, 0)
+        if known > 0:
+            return known
+        if finding_cvss and finding_cvss > 0:
+            return finding_cvss
+        return 3.0
 
-        for svc, weight in self.service_priority_weights.items():
-            if svc in service or svc in product:
-                return weight * 2   # Scale to match point system (max ~20)
-        return 0
-
-    def calculate_risk(self, finding):
+    def calculate_risk(self, finding: dict) -> dict:
         score = 0
 
-        # CVSS Score (max 40 points)
-        cve = finding.get("cve", "")
-        cvss = self.cvss_scores.get(cve, 3.0)
+        cvss = self._cvss_score(
+            finding.get("cve", ""),
+            finding.get("cvss_live", finding.get("cvss", 0)),
+        )
+        finding["cvss"] = cvss
         score += cvss * 4
 
-        # Exploit Available (20 points)
-        if finding.get("type") == "metasploit":
+        etype = finding.get("type", "")
+        if etype == "metasploit": score += 20
+        elif etype == "hydra":    score += 15
+
+        if finding.get("port") in self.EXPOSED_PORTS:
             score += 20
 
-        # Exposure - well known ports (20 points)
-        exposed_ports = [21, 22, 23, 80, 139, 445, 3306]
-        if finding.get("port") in exposed_ports:
+        score += round(finding.get("epss", 0.0) * 15)
+
+        if finding.get("in_kev"):
             score += 20
 
-        # Credentials possible (20 points)
-        if finding.get("type") == "hydra":
-            score += 20
+        score += round(finding.get("threat_score", 0) * 0.10)
 
-        # Server Priority Bonus (max 20 points)
-        priority_bonus = self.get_service_priority_bonus(finding)
-        score += priority_bonus
-        finding["priority_bonus"] = priority_bonus
+        svc = finding.get("service", "").lower()
+        bonus = next((w*2 for k,w in self.SERVICE_WEIGHTS.items() if k in svc), 0)
+        finding["priority_bonus"] = bonus
+        score += bonus
 
-        finding["risk_score"] = round(score)
-        finding["cvss"] = cvss
-
-        print(f"  [Risk] {finding['host']}:{finding['port']} | "
-              f"CVE: {cve} | CVSS: {cvss} | "
-              f"Priority Bonus: +{priority_bonus} | Risk Score: {round(score)}")
-
+        finding["risk_score"] = round(min(score, 100))
         return finding
 
-    def filter_by_risk(self, findings, threshold=30):
-        print(f"\n[Risk Engine] Calculating Risk Scores...")
-        print(f"[Risk Engine] Threshold: {threshold}")
-
-        scored = []
-        deferred = []
-
-        for finding in findings:
-            finding = self.calculate_risk(finding)
-            if finding["risk_score"] >= threshold:
-                scored.append(finding)
+    def filter_by_risk(self, findings: list, threshold: int = 30) -> list:
+        print(f"\n[Risk Engine] Scoring {len(findings)} findings (threshold={threshold})...")
+        scored, deferred = [], []
+        for f in findings:
+            self.calculate_risk(f)
+            if f["risk_score"] >= threshold:
+                scored.append(f)
             else:
-                deferred.append(finding)
-                print(f"  [Low Risk] Deferring: {finding['host']}:{finding['port']}")
+                deferred.append(f)
 
-        print(f"\n  [+] High Risk Targets: {len(scored)}")
-        print(f"  [-] Deferred Targets : {len(deferred)}")
-
-        # Sort by: risk_score DESC, then CVSS DESC, then priority_bonus DESC
-        scored.sort(
-            key=lambda x: (x["risk_score"], x.get("cvss", 0), x.get("priority_bonus", 0)),
-            reverse=True
-        )
-
-        print(f"\n  [Server Priority Order]")
+        scored.sort(key=lambda x: (x["risk_score"], x.get("cvss",0)), reverse=True)
+        print(f"  [+] High-risk: {len(scored)}  |  Deferred: {len(deferred)}")
         for i, f in enumerate(scored, 1):
-            print(f"    #{i} {f['host']}:{f['port']} | "
-                  f"Score: {f['risk_score']} | CVSS: {f.get('cvss', 'N/A')} | "
-                  f"Service: {f.get('service', '?')}")
-
+            print(f"  #{i} {f['host']}:{f['port']} | Score={f['risk_score']} "
+                  f"CVSS={f.get('cvss','?')} EPSS={f.get('epss',0):.3f}")
         return scored

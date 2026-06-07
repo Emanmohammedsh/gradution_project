@@ -1,0 +1,44 @@
+version: '3.9'
+
+services:
+  backend:
+    build: .
+    container_name: redteam-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///database/redteam.db
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./reports:/app/reports
+      - ./database:/app/database
+    restart: unless-stopped
+
+  # Uncomment for PostgreSQL instead of SQLite:
+  # postgres:
+  #   image: postgres:16
+  #   container_name: redteam-db
+  #   environment:
+  #     POSTGRES_DB: redteam
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: admin123
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+  # Uncomment for Neo4j attack graph:
+  # neo4j:
+  #   image: neo4j:5
+  #   container_name: redteam-graph
+  #   ports:
+  #     - "7474:7474"
+  #     - "7687:7687"
+  #   environment:
+  #     NEO4J_AUTH: neo4j/password
+
+# volumes:
+#   pgdata:

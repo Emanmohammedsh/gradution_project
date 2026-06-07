@@ -17,10 +17,28 @@ VENDOR_THREAT_MAP = {
 class VendorIntelligence:
 
     def threat_actors(self, vendor: str) -> list[str]:
+        if not vendor:
+            return []
         return VENDOR_THREAT_MAP.get(vendor.lower(), [])
 
     def enrich_finding(self, finding: dict) -> dict:
-        product = finding.get("product", "").lower().split()[0]
-        actors  = self.threat_actors(product)
+        if not isinstance(finding, dict):
+            return finding
+
+        raw = finding.get("product", "")
+
+        if not raw or not isinstance(raw, str):
+            return finding
+
+        parts = raw.strip().lower().split()
+
+        if not parts:
+            return finding
+
+        product = parts[0]
+
+        actors = self.threat_actors(product)
+
         finding["threat_actors"] = actors
+
         return finding

@@ -1,57 +1,42 @@
 """
 config/database.py
 ------------------
-Database connection and session management.
-Supports SQLite (default / dev) and PostgreSQL (production).
-Uses SQLAlchemy so the rest of the code stays DB-agnostic.
+Database connection, session management, and ORM base.
+Supports SQLite (dev) and PostgreSQL (production) via DATABASE_URL.
 """
 
-import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from config.settings import DB_URL
 
-# ─────────────────────────────────────────────
-# Engine
-# ─────────────────────────────────────────────
+# ── Engine ────────────────────────────────────────────────────
 _connect_args = {"check_same_thread": False} if DB_URL.startswith("sqlite") else {}
 
 engine = create_engine(
     DB_URL,
     connect_args=_connect_args,
-    echo=False,          # set True to log every SQL statement
-    pool_pre_ping=True,  # auto-reconnect on stale connections
+    echo=False,
+    pool_pre_ping=True,
 )
 
-# ─────────────────────────────────────────────
-# Session factory
-# ─────────────────────────────────────────────
-SessionLocal = sessionmaker(
-    bind=engine,
-    autocommit=False,
-    autoflush=False,
-)
+# ── Session factory ───────────────────────────────────────────
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
-# ─────────────────────────────────────────────
-# Declarative base (all ORM models inherit this)
-# ─────────────────────────────────────────────
+# ── Declarative base — all ORM models inherit this ───────────
 Base = declarative_base()
 
 
-# ─────────────────────────────────────────────
-# Helpers
-# ─────────────────────────────────────────────
+# ── FastAPI dependency ────────────────────────────────────────
 def get_db():
     """
-    FastAPI / dependency-injection style session generator.
+    Yield a DB session; close it when the request ends.
 
-    Usage:
-        from config.database import get_db
-        from sqlalchemy.orm import Session
+    Usage in FastAPI:
         from fastapi import Depends
+        from sqlalchemy.orm import Session
 
         @router.get("/items")
-        def read_items(db: Session = Depends(get_db)):
+        def items(db: Session = Depends(get_db)):
             ...
     """
     db = SessionLocal()
@@ -61,26 +46,31 @@ def get_db():
         db.close()
 
 
+# ── Startup helper ────────────────────────────────────────────
 def init_db():
     """
-    Create all tables defined via ORM models.
-    Call once at application startup (e.g. from main.py or an Alembic migration).
+    Create all tables that are registered with Base.
+    Called once at app startup (app.py on_event("startup")).
     """
-    # Import models here so they register with Base before create_all
-    # from database.models import scan, vulnerability, report   # uncomment when models exist
+    # Import every ORM model so SQLAlchemy knows about them
+    # before calling create_all().
+    from database.models import scan_session   # noqa: F401
+    from database.models import vulnerability  # noqa: F401
+    from database.models import exploit_result # noqa: F401
+    from database.models import mitre_finding  # noqa: F401
+    from database.models import report         # noqa: F401
+
     Base.metadata.create_all(bind=engine)
-    print("[DB] Tables initialised.")
+    print("[DB] All tables created / verified.")
 
 
-def ping():
-    """
-    Return True if the database is reachable, False otherwise.
-    Useful for health-check endpoints.
-    """
+# ── Health-check ──────────────────────────────────────────────
+def ping() -> bool:
+    """Return True if the database is reachable."""
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[DB] Ping failed: {exc}")
         return False

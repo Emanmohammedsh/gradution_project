@@ -9,6 +9,12 @@ class FeatureEngineering:
 
     def transform_one(self, ctx: dict) -> str:
         parts = [
+            # بيانات MITRE الجديدة
+            ctx.get("name", ""),
+            ctx.get("description", ""),
+            ctx.get("platforms", ""),
+            ctx.get("technique_id", ""),
+            # بيانات النظام القديمة
             ctx.get("exploit", ""),
             ctx.get("service", ""),
             ctx.get("cve", ""),

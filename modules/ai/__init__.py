@@ -12,7 +12,7 @@ from modules.ai.explainable_ai import ExplainableAI
 from modules.ai.model_registry import ModelRegistry
 
 # IMPORTANT: define alias explicitly
-AIPipeline = TrainingPipeline
+from modules.ai.ai_pipeline import AIPipeline
 
 __all__ = [
     "DatasetBuilder",

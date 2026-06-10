@@ -1,21 +1,28 @@
 """
 Technology Detector - Detects web technologies and frameworks
+Based on OWASP Top 10 2025 - A06 Vulnerable Components
 """
 
 SIGNATURES = {
     "Joomla": ["Joomla", "/components/com_"],
     "Apache": ["Server: Apache"],
     "Nginx": ["Server: nginx"],
-    "WordPress": ["wp-content", "wp-includes"],
+    "IIS": ["Server: Microsoft-IIS"],
+    "WordPress": ["wp-content", "wp-includes", "WordPress"],
     "jQuery": ["jquery"],
     "Bootstrap": ["bootstrap"],
+    "Django": ["csrfmiddlewaretoken", "Django"],
+    "Laravel": ["laravel_session", "Laravel"],
+    "React": ["react", "ReactDOM"],
+    "Vue.js": ["vue.js", "vue.min.js"],
+    "Angular": ["ng-app", "angular.js"],
 }
 
 class TechnologyDetector:
-    def __init__(self, timeout=5):
+    def __init__(self, timeout: int = 5):
         self.timeout = timeout
     
-    def detect(self, url):
+    def detect(self, url: str) -> list:
         detected = []
         try:
             import urllib.request

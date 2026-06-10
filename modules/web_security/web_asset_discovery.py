@@ -1,5 +1,6 @@
 """
 Web Asset Discovery - Discovers JS, CSS, images, etc.
+Based on OWASP Top 10 2025 - A06 Vulnerable Components
 """
 
 import re

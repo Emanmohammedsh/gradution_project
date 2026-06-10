@@ -3,7 +3,7 @@ main.py — Hybrid AI Red Team Simulation Framework v2.1
 =======================================================
 Pipeline:
   1   Reconnaissance
-  2   Scanning
+  2   Scanning + OWASP Web Security
   3   Vulnerability Mapping
   4   Threat Intelligence     (CVSS · EPSS · KEV · Vendor)
   5   Risk Engine
@@ -33,6 +33,20 @@ from modules.ai                 import AIPipeline
 from modules.reporting          import ReportGenerator
 from modules.social_engineering import SocialEngineeringModule
 
+# ── OWASP Web Security Module (NEW) ──────────────────────────────────
+from modules.web_security import (
+    OWASPEngine,
+    TechnologyDetector,
+    InjectionChecker,
+    BrokenAccessControlChecker,
+    AuthFailureChecker,
+    SecurityMisconfigurationChecker,
+    VulnerableComponentsChecker,
+    CryptographicFailureChecker,
+    SSRFChecker,
+    OWASPReportBuilder
+)
+
 # ── Threat Intelligence ───────────────────────────────────────────────
 from modules.threat_intelligence.threat_correlation import ThreatCorrelation
 from modules.threat_intelligence.threat_score       import ThreatScore
@@ -58,6 +72,44 @@ setup_logging()
 log = get_logger(__name__)
 
 
+def run_owasp_web_scan(target_url):
+    """تشغيل فحوصات OWASP على المواقع"""
+    print("\n[🔒 OWASP Web Security Scan]")
+    print("─" * 40)
+    
+    # Check if target is a web URL
+    if not target_url.startswith(('http://', 'https://')):
+        print("  [⚠️] Target is not a web URL, skipping OWASP scan")
+        return {'owasp_findings': [], 'technologies': [], 'owasp_summary': {}}
+    
+    engine = OWASPEngine(target_url, threads=3)
+    
+    # Register all OWASP checkers
+    engine.register_checker(InjectionChecker(target_url))
+    engine.register_checker(BrokenAccessControlChecker(target_url))
+    engine.register_checker(AuthFailureChecker(target_url))
+    engine.register_checker(SecurityMisconfigurationChecker(target_url))
+    engine.register_checker(VulnerableComponentsChecker(target_url))
+    engine.register_checker(CryptographicFailureChecker(target_url))
+    engine.register_checker(SSRFChecker(target_url))
+    
+    # Run checks
+    results = engine.run_all_checks()
+    
+    # Detect technologies
+    detector = TechnologyDetector()
+    technologies = detector.detect(target_url)
+    
+    if technologies:
+        print(f"  📊 Detected technologies: {', '.join(technologies)}")
+    
+    return {
+        'owasp_findings': results['vulnerabilities'],
+        'technologies': technologies,
+        'owasp_summary': results['summary']
+    }
+
+
 def main():
     print("=" * 62)
     print("   Hybrid AI Red Team Simulation Framework v2.1")
@@ -79,17 +131,38 @@ def main():
     if not live_hosts:
         print("[-] No live hosts. Halting."); return
 
-    # ── Phase 2: Scanning ─────────────────────────────────────────────
+    # ── Phase 2: Scanning + OWASP Web Security ────────────────────────
     print("\n[Phase 2] Scanning & Service Enumeration")
     scanner      = ScannerModule(live_hosts[0])
     scan_results = scanner.scan_target()
+    
+    # Run OWASP web security scan (adds web vulnerability detection)
+    owasp_results = run_owasp_web_scan(target)
+    
     if not scan_results or all(len(d["ports"]) == 0 for d in scan_results.values()):
         print("[-] No open ports found. Halting."); return
 
     # ── Phase 3: Vulnerability Mapping ────────────────────────────────
-    print("\n[Phase 3] Vulnerability Mapping (ExploitDB + Fallback)")
+    print("\n[Phase 3] Vulnerability Mapping (ExploitDB + Fallback + OWASP)")
     vuln_mapper   = VulnMapperModule()
     vuln_findings = vuln_mapper.map_vulnerabilities(scan_results)
+    
+    # Merge OWASP findings into vulnerability list
+    if owasp_results.get('owasp_findings'):
+        for owasp_vuln in owasp_results['owasp_findings']:
+            vuln_findings.append({
+                'host': target,
+                'port': 443 if 'https' in target else 80,
+                'service': 'web',
+                'vulnerability': owasp_vuln.get('title', 'Unknown'),
+                'description': owasp_vuln.get('description', ''),
+                'severity': owasp_vuln.get('risk', 'MEDIUM').lower(),
+                'cve': owasp_vuln.get('cwe_id', ''),
+                'remediation': owasp_vuln.get('remediation', ''),
+                'source': 'OWASP Web Security'
+            })
+        print(f"  [+] Added {len(owasp_results['owasp_findings'])} OWASP findings")
+    
     if not vuln_findings:
         print("[-] No vulnerabilities mapped. Halting."); return
 
@@ -218,6 +291,8 @@ def main():
         "attack_phases":   len(attack_chain),
         "post_credentials": len(post_data.get("hashes", [])),
         "lateral_targets": len(post_data.get("lateral_opps", [])),
+        "owasp_findings":  len(owasp_results.get('owasp_findings', [])),
+        "technologies":    owasp_results.get('technologies', [])
     }
 
     # ReportGenerator.generate() — uses the corrected signature
@@ -248,8 +323,10 @@ def main():
     # ── Final Summary ─────────────────────────────────────────────────
     print(f"\n{'=' * 62}")
     print(f"[+] Session ID    : {session_id}")
-    print(f"[+] Pipeline      : COMPLETE (12 phases)")
+    print(f"[+] Pipeline      : COMPLETE (12 phases + OWASP)")
     print(f"[+] Findings      : {len(vuln_findings)} vulnerabilities")
+    print(f"[+] OWASP Findings: {len(owasp_results.get('owasp_findings', []))}")
+    print(f"[+] Technologies  : {', '.join(owasp_results.get('technologies', []))}")
     print(f"[+] MITRE Techs   : {len(merged_techs)} unique techniques")
     print(f"[+] Chain Phases  : {len(attack_chain)}")
     print(f"[+] MITRE Coverage: {coverage['tactic_coverage_pct']}%")

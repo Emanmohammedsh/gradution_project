@@ -2,19 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies (nmap for scanning)
 RUN apt-get update && apt-get install -y \
-    nmap \
+    git perl python3 curl nmap netcat-openbsd whois dnsutils bash \
     && rm -rf /var/lib/apt/lists/*
 
+RUN git clone https://github.com/sullo/nikto.git /opt/nikto && \
+    ln -s /opt/nikto/program/nikto.pl /usr/local/bin/nikto
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create required directories
-RUN mkdir -p data models reports/json reports/pdf logs database
+RUN mkdir -p reports/json reports/pdf logs database data models scan_results
 
-EXPOSE 8000
-
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "main.py"]

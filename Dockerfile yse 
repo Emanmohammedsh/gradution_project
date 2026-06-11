@@ -1,0 +1,48 @@
+   
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# تثبيت أدوات النظام الأساسية + أدوات الاختراق المطلوبة للمشروع
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nmap \
+    curl \
+    netcat-openbsd \
+    hydra \
+    nikto \
+    dnsutils \
+    whois \
+    git \
+    perl \
+    python3 \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# نسخ ملف المتطلبات أولاً (لتحسين caching)
+COPY requirements.txt .
+
+# تحديث pip وتثبيت مكتبات Python
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# نسخ المشروع بالكامل
+COPY . .
+
+# إنشاء مجلدات التشغيل
+RUN mkdir -p \
+    reports/json \
+    reports/pdf \
+    logs \
+    database \
+    data \
+    models \
+    scan_results
+
+# تشغيل التطبيق
+CMD ["python", "main.py"]
+
+
+
+
+

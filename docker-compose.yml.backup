@@ -1,0 +1,107 @@
+version: '3.9'
+
+services:
+  # خدمة OWASP Web Scanner الرئيسية
+  owasp-scanner:
+    build: .
+    container_name: owasp-web-scanner
+    stdin_open: true   # يسمح بالإدخال التفاعلي
+    tty: true          # الطرفية التفاعلية
+    network_mode: "host"  # يستخدم شبكة المضيف للوصول للشبكة المحلية
+    volumes:
+      # حفظ التقارير والسجلات خارج الحاوية
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./scan_results:/app/scan_results
+    environment:
+      - TZ=Asia/Riyadh
+      - PYTHONUNBUFFERED=1
+      - NEO4J_ENABLED=false
+      - OWASP_TIMEOUT=10
+      - OWASP_THREADS=5
+    restart: unless-stopped
+    # يمكن تشغيله بطريقتين:
+    # 1. وضع التفاعل المباشر (زي التشغيل العادي)
+    # 2. وضع API (إذا أضفنا واجهة ويب)
+
+  # خدمة API (اختياري - لوضع REST API)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: owasp-api
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DATABASE_URL=sqlite:///database/owasp.db
+    volumes:
+      - ./reports:/app/reports
+      - ./logs:/app/logs
+      - ./database:/app/database
+    depends_on:
+      - owasp-scanner
+    restart: unless-stopped
+    profiles:
+      - api
+
+  # قاعدة بيانات PostgreSQL (لتخزين النتائج)
+  postgres:
+    image: postgres:15
+    container_name: owasp-db
+    environment:
+      POSTGRES_DB: owasp_scanner
+      POSTGRES_USER: scanner
+      POSTGRES_PASSWORD: scanner123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - owasp-network
+    profiles:
+      - with-db
+
+  # Neo4j لتحليل الرسم البياني للهجمات
+  neo4j:
+    image: neo4j:5-community
+    container_name: owasp-graph
+    environment:
+      NEO4J_AUTH: neo4j/password123
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+    ports:
+      - "7474:7474"  # واجهة الويب
+      - "7687:7687"  # بروتوكول Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - owasp-network
+    profiles:
+      - with-graph
+
+  # Redis للتخزين المؤقت (اختياري)
+  redis:
+    image: redis:7-alpine
+    container_name: owasp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - owasp-network
+    profiles:
+      - with-cache
+
+networks:
+  owasp-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  redis_data:

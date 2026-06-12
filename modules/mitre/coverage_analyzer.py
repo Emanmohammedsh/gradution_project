@@ -17,10 +17,10 @@ class CoverageAnalyzer:
             for layer in r.get("layers", []):
                 tid = layer.get("technique_id", "")
                 if not tid.startswith("T-"):
-                    covered_techs.add(tid)
+                    covered_techs.add(str(tid))
                 tactic = layer.get("tactic", "")
                 if tactic:
-                    covered_tactics.add(tactic)
+                    covered_tactics.add(str(tactic))
 
         total_tactics = len(MITRE_TACTICS_ORDER)
         return {

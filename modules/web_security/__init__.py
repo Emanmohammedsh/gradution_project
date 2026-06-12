@@ -1,41 +1,31 @@
 """
-OWASP Web Security Testing Module
-Auto-generated from OWASP Top 10 2025 GitHub repository
-Official Reference: https://github.com/OWASP/Top10
+web_security
+------------
+OWASP Top 10 (2021) analysis engine for the Hybrid AI Red Team Framework.
+Analyses web services using service banners, technology fingerprints,
+and Nmap HTTP script output — no active payload injection.
 """
 
-from .owasp_engine import OWASPEngine
-from .technology_detector import TechnologyDetector
-from .web_asset_discovery import WebAssetDiscovery
-from .injection_checker import InjectionChecker
-from .broken_access_control_checker import BrokenAccessControlChecker
-from .auth_failure_checker import AuthFailureChecker
-from .security_misconfiguration_checker import SecurityMisconfigurationChecker
-from .vulnerable_components_checker import VulnerableComponentsChecker
-from .cryptographic_failure_checker import CryptographicFailureChecker
-from .ssrf_checker import SSRFChecker
-from .zap_connector import ZAPConnector
-from .nuclei_connector import NucleiConnector
-from .nikto_connector import NiktoConnector
-from .owasp_report_builder import OWASPReportBuilder
-from .models import WebFinding, OWASPReport
+from .owasp_engine                       import OWASPEngine
+from .technology_detector                import TechnologyDetector
+from .injection_checker                  import InjectionChecker
+from .broken_access_control_checker      import BrokenAccessControlChecker
+from .auth_failure_checker               import AuthFailureChecker
+from .security_misconfiguration_checker  import SecurityMisconfigurationChecker
+from .vulnerable_components_checker      import VulnerableComponentsChecker
+from .cryptographic_failure_checker      import CryptographicFailureChecker
+from .ssrf_checker                       import SSRFChecker
+from .owasp_report_builder               import OWASPReportBuilder
 
-__version__ = "2.0.0"
 __all__ = [
-    'OWASPEngine',
-    'TechnologyDetector',
-    'WebAssetDiscovery',
-    'InjectionChecker',
-    'BrokenAccessControlChecker',
-    'AuthFailureChecker',
-    'SecurityMisconfigurationChecker',
-    'VulnerableComponentsChecker',
-    'CryptographicFailureChecker',
-    'SSRFChecker',
-    'ZAPConnector',
-    'NucleiConnector',
-    'NiktoConnector',
-    'OWASPReportBuilder',
-    'WebFinding',
-    'OWASPReport'
+    "OWASPEngine",
+    "TechnologyDetector",
+    "InjectionChecker",
+    "BrokenAccessControlChecker",
+    "AuthFailureChecker",
+    "SecurityMisconfigurationChecker",
+    "VulnerableComponentsChecker",
+    "CryptographicFailureChecker",
+    "SSRFChecker",
+    "OWASPReportBuilder",
 ]

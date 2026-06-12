@@ -1,59 +1,103 @@
 """
-Pydantic models for web security findings
+database/models.py
+-------------------
+SQLAlchemy ORM models — 5 tables.
+يُستورد من config/database.py عند init_db().
 """
 
-from typing import List, Optional
+import json
 from datetime import datetime
 
-class WebFinding:
-    def __init__(self, check_name: str, owasp_id: str, title: str, description: str,
-                 risk_level: str, confidence: float, affected_component: Optional[str] = None,
-                 evidence: Optional[List[str]] = None, mitre_technique: Optional[str] = None,
-                 cvss_base: float = 0.0, remediation: str = ""):
-        self.check_name = check_name
-        self.owasp_id = owasp_id
-        self.title = title
-        self.description = description
-        self.risk_level = risk_level
-        self.confidence = confidence
-        self.affected_component = affected_component
-        self.evidence = evidence or []
-        self.mitre_technique = mitre_technique
-        self.cvss_base = cvss_base
-        self.remediation = remediation
-        self.timestamp = datetime.now().isoformat()
-    
-    def to_dict(self):
-        return {
-            'check_name': self.check_name,
-            'owasp_id': self.owasp_id,
-            'title': self.title,
-            'description': self.description,
-            'risk_level': self.risk_level,
-            'confidence': self.confidence,
-            'affected_component': self.affected_component,
-            'evidence': self.evidence,
-            'mitre_technique': self.mitre_technique,
-            'cvss_base': self.cvss_base,
-            'remediation': self.remediation,
-            'timestamp': self.timestamp
-        }
+from sqlalchemy import (
+    Column, Integer, String, Float, Boolean,
+    Text, DateTime, ForeignKey,
+)
+from config.database import Base
 
-class OWASPReport:
-    def __init__(self, target: str, scan_time: str, findings: List[WebFinding]):
-        self.target = target
-        self.scan_time = scan_time
-        self.findings = findings
-    
-    def to_dict(self):
-        return {
-            'target': self.target,
-            'scan_time': self.scan_time,
-            'findings': [f.to_dict() for f in self.findings],
-            'summary': {
-                'total_findings': len(self.findings),
-                'critical': len([f for f in self.findings if f.risk_level == 'CRITICAL']),
-                'high': len([f for f in self.findings if f.risk_level == 'HIGH']),
-                'medium': len([f for f in self.findings if f.risk_level == 'MEDIUM'])
-            }
-        }
+
+class ScanSession(Base):
+    __tablename__ = "scan_sessions"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), unique=True, nullable=False, index=True)
+    target     = Column(String(256), nullable=False)
+    lhost      = Column(String(64),  nullable=True, default="")
+    live_hosts = Column(Text, default="[]")        # JSON list
+    status     = Column(String(32),  default="running")
+    risk_score = Column(Float,       default=0.0)
+    created_at = Column(DateTime,    default=datetime.utcnow)
+    updated_at = Column(DateTime,    default=datetime.utcnow,
+                        onupdate=datetime.utcnow)
+
+    def live_hosts_list(self) -> list:
+        try:
+            return json.loads(self.live_hosts or "[]")
+        except Exception:
+            return []
+
+
+class Vulnerability(Base):
+    __tablename__ = "vulnerabilities"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    session_db_id = Column(Integer, ForeignKey("scan_sessions.id"),
+                           nullable=False, index=True)
+    host          = Column(String(64),  default="")
+    port          = Column(Integer,     default=0)
+    service       = Column(String(64),  default="")
+    cve           = Column(String(32),  default="", index=True)
+    severity      = Column(String(16),  default="low")
+    cvss          = Column(Float,       default=0.0)
+    risk_score    = Column(Float,       default=0.0)
+    exploit_ref   = Column(String(256), default="")
+    title         = Column(String(512), default="")
+    epss          = Column(Float,       default=0.0)
+    kev           = Column(Boolean,     default=False)
+    raw_json      = Column(Text,        default="{}")
+    created_at    = Column(DateTime,    default=datetime.utcnow)
+
+
+class ExploitResult(Base):
+    __tablename__ = "exploit_results"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    session_db_id = Column(Integer, ForeignKey("scan_sessions.id"),
+                           nullable=False, index=True)
+    host          = Column(String(64),  default="")
+    port          = Column(Integer,     default=0)
+    cve           = Column(String(32),  default="")
+    module        = Column(String(256), default="")
+    result        = Column(String(16),  default="FAILED")
+    exploit_score = Column(Float,       default=0.0)
+    payload       = Column(String(256), default="")
+    exploit_path  = Column(Text,        default="[]")
+    raw_json      = Column(Text,        default="{}")
+    created_at    = Column(DateTime,    default=datetime.utcnow)
+
+
+class MitreFinding(Base):
+    __tablename__ = "mitre_findings"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    session_db_id  = Column(Integer, ForeignKey("scan_sessions.id"),
+                            nullable=False, index=True)
+    host           = Column(String(64),  default="")
+    technique_id   = Column(String(16),  default="", index=True)
+    technique_name = Column(String(256), default="")
+    tactic         = Column(String(64),  default="")
+    confidence     = Column(Float,       default=0.0)
+    source         = Column(String(32),  default="")
+    fused_score    = Column(Float,       default=0.0)
+    raw_json       = Column(Text,        default="{}")
+    created_at     = Column(DateTime,    default=datetime.utcnow)
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    session_db_id = Column(Integer, ForeignKey("scan_sessions.id"),
+                           nullable=False, index=True)
+    report_file   = Column(String(512), default="")
+    format_type   = Column(String(16),  default="json")
+    size_bytes    = Column(Integer,     default=0)

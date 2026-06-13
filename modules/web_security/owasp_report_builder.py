@@ -4,6 +4,7 @@ web_security/owasp_report_builder.py
 Builds the structured OWASP report from a list of WebFinding objects.
 Groups findings by OWASP category, computes statistics, and
 produces a dict ready for JSON serialisation or frontend consumption.
+يقرأ بيانات OWASP من load_metadata() بدل OWASP_CATEGORIES الثابتة.
 """
 
 import json
@@ -13,17 +14,11 @@ from typing import List
 
 from .web_findings import WebFinding, load_metadata
 
-# Canonical OWASP Top 10 2021 IDs (for coverage calculation)
-_TOP10_IDS = [
-    "A01:2021", "A02:2021", "A03:2021", "A04:2021", "A05:2021",
-    "A06:2021", "A07:2021", "A08:2021", "A09:2021", "A10:2021",
-]
-
 
 class OWASPReportBuilder:
 
     def __init__(self):
-        # Build reverse map: owasp_id → owasp_name from metadata JSON
+        # بناء reverse map: owasp_id → owasp_name من الـ JSON
         meta = load_metadata()
         self._owasp_names: dict = {}
         for entry in meta.values():
@@ -33,16 +28,6 @@ class OWASPReportBuilder:
                 self._owasp_names[oid] = name
 
     def build(self, findings: List[WebFinding], target: str = "unknown") -> dict:
-        """
-        Parameters
-        ----------
-        findings : list of WebFinding from OWASPEngine
-        target   : IP or hostname string
-
-        Returns
-        -------
-        Full OWASP report dict
-        """
         by_category  = defaultdict(list)
         by_risk      = defaultdict(int)
         by_technique = defaultdict(int)
@@ -54,11 +39,11 @@ class OWASPReportBuilder:
                 by_technique[f.mitre_technique] += 1
 
         covered = sorted(by_category.keys())
-        missing = [oid for oid in _TOP10_IDS if oid not in by_category]
-
+        all_ids = sorted(self._owasp_names.keys())
+        missing = [oid for oid in all_ids if oid not in by_category]
         max_cvss = max((f.cvss_base for f in findings), default=0.0)
 
-        report = {
+        return {
             "meta": {
                 "target":         target,
                 "scan_timestamp": datetime.utcnow().isoformat() + "Z",
@@ -88,7 +73,6 @@ class OWASPReportBuilder:
             },
             "all_findings": [f.to_dict() for f in findings],
         }
-        return report
 
     def to_json(self, report: dict, indent: int = 2) -> str:
         return json.dumps(report, indent=indent)
@@ -96,3 +80,4 @@ class OWASPReportBuilder:
     def save(self, report: dict, path: str) -> None:
         with open(path, "w") as fh:
             json.dump(report, fh, indent=2)
+        print(f"[OWASPReport] Saved → {path}")

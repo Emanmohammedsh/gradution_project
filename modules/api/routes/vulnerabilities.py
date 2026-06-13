@@ -1,61 +1,92 @@
 """
 api/routes/vulnerabilities.py — Vulnerability Intelligence API
+يقرأ من DB بدل DEMO_VULNS.
 """
+
 from fastapi import APIRouter, HTTPException, Query
 from modules.api.schemas import VulnOut, VulnListResponse
+from database.repository import get_all_sessions, get_vulns_by_session
 
 router = APIRouter(prefix="/api/vulnerabilities", tags=["Vulnerabilities"])
 
-# Demo dataset (populated by scan pipeline in production)
-DEMO_VULNS = [
-    {"host":"192.168.1.100","port":21, "service":"ftp",  "cve":"CVE-2011-2523","severity":"critical","cvss":10.0,"risk_score":95,"exploit":"exploit/unix/ftp/vsftpd_234_backdoor","title":"vsftpd 2.3.4 Backdoor RCE","intel":{"epss":0.975,"kev":True}},
-    {"host":"192.168.1.100","port":445,"service":"smb",  "cve":"CVE-2007-2447","severity":"critical","cvss":9.3, "risk_score":88,"exploit":"exploit/multi/samba/usermap_script",  "title":"Samba usermap_script RCE","intel":{"epss":0.970,"kev":True}},
-    {"host":"192.168.1.100","port":80, "service":"http", "cve":"CVE-2017-7679","severity":"critical","cvss":9.8, "risk_score":84,"exploit":"exploit/multi/http/apache_mod_cgi",   "title":"Apache mod_mime overflow","intel":{"epss":0.820,"kev":False}},
-    {"host":"192.168.1.100","port":6667,"service":"irc", "cve":"CVE-2010-2075","severity":"critical","cvss":9.8, "risk_score":79,"exploit":"exploit/unix/irc/unreal_ircd_3281_backdoor","title":"UnrealIRCd backdoor","intel":{"epss":0.965,"kev":True}},
-    {"host":"192.168.1.100","port":22, "service":"ssh",  "cve":"CVE-2008-0166","severity":"high",    "cvss":7.8, "risk_score":52,"exploit":"hydra","title":"Debian OpenSSL weak key","intel":{"epss":0.720,"kev":False}},
-    {"host":"192.168.1.100","port":3306,"service":"mysql","cve":"CVE-2009-2446","severity":"high",   "cvss":8.5, "risk_score":61,"exploit":"exploit/windows/mysql/mysql_mof",        "title":"MySQL COM_FIELD_LIST RCE","intel":{"epss":0.670,"kev":False}},
-]
+
+def _get_latest_vulns() -> list[dict]:
+    sessions = get_all_sessions()
+    if not sessions:
+        return []
+    return get_vulns_by_session(sessions[0]["id"])
+
+
+def _to_vuln_out(v: dict) -> VulnOut:
+    intel = v.get("intel", {})
+    return VulnOut(
+        host       = v.get("host", ""),
+        port       = int(v.get("port", 0)),
+        service    = v.get("service", ""),
+        cve        = v.get("cve", ""),
+        severity   = v.get("severity", "low"),
+        cvss       = float(v.get("cvss_live", v.get("cvss", 0.0))),
+        risk_score = float(v.get("risk_score", 0.0)),
+        exploit    = v.get("exploit", ""),
+        title      = v.get("title", v.get("vulnerability", "")),
+        intel      = {
+            "epss": float(v.get("epss", intel.get("epss", 0.0))),
+            "kev":  bool(v.get("in_kev", intel.get("kev", False))),
+        },
+    )
 
 
 @router.get("/", response_model=VulnListResponse)
 async def list_vulnerabilities(
     severity: str | None = Query(None, description="Filter: critical|high|medium|low"),
-    min_cvss: float = Query(0.0, description="Minimum CVSS score"),
+    min_cvss: float      = Query(0.0,  description="Minimum CVSS score"),
 ):
+    vulns = _get_latest_vulns()
+    if not vulns:
+        raise HTTPException(
+            status_code=404,
+            detail="No vulnerabilities in DB yet. Run a scan first.",
+        )
+
     filtered = [
-        v for v in DEMO_VULNS
-        if (severity is None or v["severity"] == severity)
-        and v["cvss"] >= min_cvss
+        v for v in vulns
+        if (severity is None or v.get("severity") == severity)
+        and float(v.get("cvss_live", v.get("cvss", 0.0))) >= min_cvss
     ]
+
     return VulnListResponse(
-        total          = len(filtered),
-        critical_count = sum(1 for v in filtered if v["severity"] == "critical"),
-        high_count     = sum(1 for v in filtered if v["severity"] == "high"),
-        vulnerabilities= [VulnOut(**v) for v in filtered],
+        total           = len(filtered),
+        critical_count  = sum(1 for v in filtered if v.get("severity") == "critical"),
+        high_count      = sum(1 for v in filtered if v.get("severity") == "high"),
+        vulnerabilities = [_to_vuln_out(v) for v in filtered],
     )
 
 
 @router.get("/critical", response_model=VulnListResponse)
 async def critical_vulnerabilities():
-    crits = [v for v in DEMO_VULNS if v["severity"] == "critical"]
+    vulns = [v for v in _get_latest_vulns() if v.get("severity") == "critical"]
     return VulnListResponse(
-        total=len(crits), critical_count=len(crits), high_count=0,
-        vulnerabilities=[VulnOut(**v) for v in crits],
+        total=len(vulns), critical_count=len(vulns), high_count=0,
+        vulnerabilities=[_to_vuln_out(v) for v in vulns],
     )
 
 
 @router.get("/kev", response_model=VulnListResponse)
 async def kev_vulnerabilities():
-    kevs = [v for v in DEMO_VULNS if v.get("intel", {}).get("kev")]
+    vulns = _get_latest_vulns()
+    kevs  = [
+        v for v in vulns
+        if v.get("in_kev") or v.get("intel", {}).get("kev")
+    ]
     return VulnListResponse(
         total=len(kevs), critical_count=len(kevs), high_count=0,
-        vulnerabilities=[VulnOut(**v) for v in kevs],
+        vulnerabilities=[_to_vuln_out(v) for v in kevs],
     )
 
 
 @router.get("/{cve_id}", response_model=VulnOut)
 async def get_by_cve(cve_id: str):
-    for v in DEMO_VULNS:
-        if v["cve"].lower() == cve_id.lower():
-            return VulnOut(**v)
-    raise HTTPException(status_code=404, detail=f"CVE {cve_id} not found in current scan.")
+    vulns = _get_latest_vulns()
+    for v in vulns:
+        if v.get("cve", "").lower() == cve_id.lower():
+            return _to_vuln_out(v)

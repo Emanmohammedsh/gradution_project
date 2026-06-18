@@ -10,6 +10,7 @@ import json
 import os
 from datetime import datetime
 
+from modules.mitre.cve_enricher     import CVEEnricher
 from modules.mitre.rule_resolver     import RuleResolver
 from modules.mitre.stix_resolver     import StixResolver
 from modules.mitre.ml_classifier     import MLClassifier
@@ -25,6 +26,7 @@ class MitreEngine:
         self.verbose = verbose
         print("\n[MITRE Engine] Initialising 3-layer hybrid classifier...")
 
+        self.cve_enricher      = CVEEnricher()
         self.rule_resolver     = RuleResolver()
         self.stix_resolver     = StixResolver()
         self.ml_classifier     = MLClassifier()
@@ -88,6 +90,10 @@ class MitreEngine:
 
     def _classify(self, context: dict) -> dict:
         layers = []
+
+        r0 = self.cve_enricher.resolve(context)
+        if r0:
+            layers.append(r0)
 
         r1 = self.rule_resolver.resolve(context)
         if r1:

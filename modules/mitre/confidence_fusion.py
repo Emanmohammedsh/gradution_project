@@ -7,7 +7,7 @@ Fuses confidence scores from multiple resolvers into a single verdict.
 
 class ConfidenceFusion:
 
-    WEIGHTS = {"rule_exact": 1.0, "rule_service": 0.9, "rule_cve": 0.85,
+    WEIGHTS = {"cve_enricher": 0.92, "rule_exact": 1.0, "rule_service": 0.9, "rule_cve": 0.85,
                "post_exploit": 1.0, "stix": 0.7, "ml": 0.6, "ml_fallback": 0.4}
 
     def fuse(self, layers: list[dict]) -> dict:

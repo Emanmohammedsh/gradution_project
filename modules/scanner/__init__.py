@@ -26,7 +26,10 @@ class ScannerModule:
 
         for host in raw.all_hosts():
             print(f"\n[+] Host: {host}")
-            results[host] = {"os": "unknown", "ports": []}
+            os_name = parser.get_os(host)
+            results[host] = {"os": os_name, "ports": []}
+            if os_name != "unknown":
+                print(f"  OS: {os_name}")
 
             for proto in raw[host].all_protocols():
                 for port, svc in raw[host][proto].items():

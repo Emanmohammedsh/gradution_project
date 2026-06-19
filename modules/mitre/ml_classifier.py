@@ -41,6 +41,7 @@ class MLClassifier:
         self._fe       = None
         self._ready    = False
         self._fallback = True
+        self._le       = None
         self._load()
 
     def predict(self, context: dict) -> dict | None:
@@ -69,6 +70,7 @@ class MLClassifier:
             self._fe       = bundle.get("feature_engineer") or bundle.get("vectorizer")
             self._ready    = True
             self._fallback = False
+            self._le       = bundle.get("label_encoder")
             print(f"  [ML] Classifier loaded from {MODEL_PATH}.")
         except Exception as e:
             print(f"  [ML] Failed to load model: {e} — fallback active.")
@@ -81,12 +83,20 @@ class MLClassifier:
                 X = self._fe.transform([text])
 
             pred   = self._model.predict(X)[0]
-            proba  = self._model.predict_proba(X)[0]
-            conf   = float(proba.max())
-            label  = self._model.classes_[pred] if hasattr(pred, "__index__") else str(pred)
-
-            if hasattr(self._fe, "label_encoder"):
-                label = self._fe.label_encoder.inverse_transform([pred])[0]
+            if hasattr(self._model, 'predict_proba'):
+                proba = self._model.predict_proba(X)[0]
+                conf  = float(proba.max())
+            elif hasattr(self._model, 'decision_function'):
+                scores = self._model.decision_function(X)[0]
+                scores = scores - scores.min()
+                conf   = float(scores.max() / (scores.sum() + 1e-9))
+                conf   = min(0.70, max(0.50, conf))
+            else:
+                conf = 0.60
+            if getattr(self, "_le", None) is not None:
+                label = self._le.inverse_transform([int(pred)])[0]
+            else:
+                label = str(self._model.classes_[pred]) if hasattr(pred, "__index__") else str(pred)
 
             return {
                 "technique_id":   "T-ML",

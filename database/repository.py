@@ -73,29 +73,36 @@ def save_vulnerabilities(db_id: int, vuln_findings: list) -> None:
         for v in vuln_findings:
             intel = v.get("intel", {})
             rows.append(Vulnerability(
-                session_db_id = db_id,
-                host          = v.get("host", ""),
-                port          = int(v.get("port", 0)),
-                service       = v.get("service", ""),
-                cve           = v.get("cve", ""),
-                severity      = v.get("severity", "low"),
-                cvss          = float(v.get("cvss_live", v.get("cvss", 0.0))),
-                risk_score    = float(v.get("risk_score", 0.0)),
-                exploit_ref   = v.get("exploit", ""),
-                title         = v.get("title", v.get("vulnerability", "")),
-                epss          = float(v.get("epss", intel.get("epss", 0.0))),
-                kev           = bool(v.get("in_kev", intel.get("kev", False))),
-                raw_json      = json.dumps(v),
+                session_id = db_id,
+                host       = v.get("host", ""),
+                port       = int(v.get("port", 0)),
+                service    = v.get("service", ""),
+                cve        = v.get("cve", ""),
+                severity   = v.get("severity", "low"),
+                cvss       = float(v.get("cvss_live", v.get("cvss", 0.0))),
+                risk_score = float(v.get("risk_score", 0.0)),
+                exploit    = v.get("exploit", ""),
+                title      = v.get("title", v.get("vulnerability", "")),
+                intel      = _safe(v.get("intel", {})),
             ))
         db.bulk_save_objects(rows)
         db.commit()
-        print(f"[DB] save_vulnerabilities → {len(rows)} rows  session_db_id={db_id}")
+        print(f"[DB] save_vulnerabilities → {len(rows)} rows  session_id={db_id}")
     except Exception as exc:
         db.rollback()
         print(f"[DB ERROR] save_vulnerabilities: {exc}")
     finally:
         db.close()
 
+
+def _safe(v):
+    """Convert numpy/int64 to native Python types for JSON."""
+    import numpy as np
+    if isinstance(v, (np.integer,)): return int(v)
+    if isinstance(v, (np.floating,)): return float(v)
+    if isinstance(v, dict): return {k: _safe(val) for k, val in v.items()}
+    if isinstance(v, list): return [_safe(i) for i in v]
+    return v
 
 def save_exploit_results(db_id: int, exploit_results: list) -> None:
     if not exploit_results:
@@ -105,21 +112,17 @@ def save_exploit_results(db_id: int, exploit_results: list) -> None:
         rows = []
         for r in exploit_results:
             rows.append(ExploitResult(
-                session_db_id = db_id,
-                host          = r.get("host", ""),
-                port          = int(r.get("port", 0)),
-                cve           = r.get("cve", ""),
-                module        = r.get("exploit", r.get("module", "")),
-                result        = "SUCCESS" if r.get("success") else "FAILED",
-                exploit_score = float(r.get("exploit_score",
-                                            r.get("selection_score", 0.0))),
-                payload       = r.get("payload", ""),
-                exploit_path  = json.dumps(r.get("exploit_path", [])),
-                raw_json      = json.dumps(r),
+                session_id = db_id,
+                host       = r.get("host", ""),
+                port       = int(r.get("port", 0)),
+                exploit    = r.get("exploit", r.get("module", "")),
+                success    = bool(r.get("success", False)),
+                score      = float(r.get("selection_score", 0.0)),
+                details    = _safe(r.get("details", {})),
             ))
         db.bulk_save_objects(rows)
         db.commit()
-        print(f"[DB] save_exploit_results → {len(rows)} rows  session_db_id={db_id}")
+        print(f"[DB] save_exploit_results → {len(rows)} rows  session_id={db_id}")
     except Exception as exc:
         db.rollback()
         print(f"[DB ERROR] save_exploit_results: {exc}")
@@ -138,19 +141,17 @@ def save_mitre_findings(db_id: int, mapped_results: list) -> None:
             if not primary:
                 continue
             rows.append(MitreFinding(
-                session_db_id  = db_id,
+                session_id     = db_id,
                 host           = m.get("host", ""),
                 technique_id   = primary.get("technique_id", ""),
                 technique_name = primary.get("technique_name", ""),
                 tactic         = primary.get("tactic", ""),
                 confidence     = float(primary.get("confidence", 0.0)),
                 source         = primary.get("source", ""),
-                fused_score    = float(primary.get("fused_score", 0.0)),
-                raw_json       = json.dumps(m),
             ))
         db.bulk_save_objects(rows)
         db.commit()
-        print(f"[DB] save_mitre_findings → {len(rows)} rows  session_db_id={db_id}")
+        print(f"[DB] save_mitre_findings → {len(rows)} rows  session_id={db_id}")
     except Exception as exc:
         db.rollback()
         print(f"[DB ERROR] save_mitre_findings: {exc}")
@@ -165,14 +166,13 @@ def save_report(db_id: int, report_file: str, format_type: str) -> None:
         if report_file and os.path.exists(report_file):
             size = os.path.getsize(report_file)
         row = Report(
-            session_db_id = db_id,
-            report_file   = report_file or "",
-            format_type   = format_type or "json",
-            size_bytes    = size,
+            session_id  = db_id,
+            file_path   = report_file or "",
+            report_type = format_type or "json",
         )
         db.add(row)
         db.commit()
-        print(f"[DB] save_report → {report_file} ({format_type})  session_db_id={db_id}")
+        print(f"[DB] save_report → {report_file} ({format_type})  session_id={db_id}")
     except Exception as exc:
         db.rollback()
         print(f"[DB ERROR] save_report: {exc}")
@@ -229,7 +229,7 @@ def get_vulns_by_session(db_id: int) -> list[dict]:
     db = _db()
     try:
         rows = (db.query(Vulnerability)
-                  .filter(Vulnerability.session_db_id == db_id)
+                  .filter(Vulnerability.session_id == db_id)
                   .all())
         return [json.loads(r.raw_json) for r in rows]
     finally:
@@ -240,7 +240,7 @@ def get_mitre_by_session(db_id: int) -> list[dict]:
     db = _db()
     try:
         rows = (db.query(MitreFinding)
-                  .filter(MitreFinding.session_db_id == db_id)
+                  .filter(MitreFinding.session_id == db_id)
                   .all())
         return [
             {
@@ -262,7 +262,7 @@ def get_exploits_by_session(db_id: int) -> list[dict]:
     db = _db()
     try:
         rows = (db.query(ExploitResult)
-                  .filter(ExploitResult.session_db_id == db_id)
+                  .filter(ExploitResult.session_id == db_id)
                   .all())
         return [json.loads(r.raw_json) for r in rows]
     finally:

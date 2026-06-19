@@ -73,16 +73,43 @@ setup_logging()
 log = get_logger(__name__)
 
 
+def _probe_http_banner(url):
+    """يجيب Server header + جزء من الـ body فعلياً عشان tech detection يكون حقيقي"""
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "RedTeamFramework/2.0"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            headers = dict(r.headers)
+            body = r.read(2000).decode("utf-8", errors="ignore")
+        server = headers.get("Server", "")
+        powered_by = headers.get("X-Powered-By", "")
+        parts = (server.split("/", 1) + [""])[:2] if server else ("", "")
+        product, version = parts[0], parts[1]
+        return {
+            "product": product,
+            "version": version,
+            "banner": f"{server} {powered_by} {body}".strip(),
+            "nmap_scripts": {},
+        }
+    except Exception as e:
+        print(f"  [TechDetect] HTTP probe failed: {e}")
+        return {"product": "", "version": "", "banner": "", "nmap_scripts": {}}
+
+
 def run_owasp_web_scan(target_url):
     """تشغيل فحوصات OWASP على المواقع"""
     print("\n[🔒 OWASP Web Security Scan]")
     print("─" * 40)
     
-    # Check if target is a web URL
-    if not target_url.startswith(('http://', 'https://')):
-        print("  [⚠️] Target is not a web URL, skipping OWASP scan")
-        return {'owasp_findings': [], 'technologies': [], 'owasp_summary': {}}
-    
+    # Auto-convert IP to URL for OWASP scan
+    import re as _rew
+    if not target_url.startswith(("http://", "https://")):
+        if _rew.match(r"^[\d.]+$", target_url):
+            target_url = f"http://{target_url}"
+            print(f"  [OWASP] Auto URL: {target_url}")
+        else:
+            print("  [⚠] Target is not a web URL, skipping OWASP scan")
+            return {"owasp_findings": [], "technologies": [], "owasp_summary": {}}
     engine = OWASPEngine(target_url, threads=3)
     
     # Register all OWASP checkers
@@ -99,7 +126,9 @@ def run_owasp_web_scan(target_url):
     
     # Detect technologies
     detector = TechnologyDetector()
-    technologies = detector.detect(target_url)
+    service_data = _probe_http_banner(target_url)
+    tech_result = detector.detect(service_data, enrich_nvd=False)
+    technologies = tech_result.get("tech_stack", [])
     
     if technologies:
         print(f"  📊 Detected technologies: {', '.join(technologies)}")
@@ -117,9 +146,12 @@ def main():
     print("   UCAS Cyber Security Engineering 2026")
     print("=" * 62)
 
-    target = input("\nEnter Target IP or Network (e.g. 192.168.1.100): ").strip()
+    target = input("\nEnter Target IP or Network (e.g. 192.168.1.100 or http://site.com): ").strip()
     lhost  = input("Enter Your Kali IP (LHOST): ").strip()
-
+    # استخرج الـ IP من URL لو المستخدم حط http://
+    import re as _re
+    _ip_match = _re.search(r'https?://([\d.]+)', target)
+    scan_target = _ip_match.group(1) if _ip_match else target
     session_id = f"SIM-{uuid.uuid4().hex[:8].upper()}"
     ts         = datetime.now().strftime("%Y%m%d_%H%M%S")
     log.info("Session %s started — target=%s lhost=%s", session_id, target, lhost)
@@ -127,7 +159,7 @@ def main():
     # ── Phase 1: Reconnaissance ───────────────────────────────────────
     print(f"\n{'─'*50}")
     print("[Phase 1] Reconnaissance")
-    recon      = ReconModule(target)
+    recon      = ReconModule(scan_target)
     live_hosts = recon.discover_hosts()
     if not live_hosts:
         print("[-] No live hosts. Halting."); return

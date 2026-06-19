@@ -871,3 +871,21 @@ wi fi networks adversaries may gain initial access to target systems by connecti
 "process argument spoofing adversaries may attempt to hide process command line arguments by overwriting process memory process command line arguments are stored in the process environment block peb , a data structure used by windows to store various information about used by a process the peb includes the process command line arguments that are referenced when executing the process when a process is created, defensive windows",defense-evasion
 "cor profiler adversaries may leverage the cor profiler environment variable to hijack the execution flow of programs that load the net clr the cor profiler is a net framework feature which allows developers to specify an unmanaged or external of net profiling dll to be loaded into each net process that loads the common language runtime clr these profilers are designed to monitor, troubleshoot, and de windows",defense-evasion
 "cor profiler adversaries may leverage the cor profiler environment variable to hijack the execution flow of programs that load the net clr the cor profiler is a net framework feature which allows developers to specify an unmanaged or external of net profiling dll to be loaded into each net process that loads the common language runtime clr these profilers are designed to monitor, troubleshoot, and de windows",execution
+vsftpd backdoor ftp 21 exploit remote,initial-access
+vsftpd 2.3.4 backdoor,initial-access
+unreal ircd backdoor remote,initial-access
+ms08-067 netapi windows exploit,initial-access
+apache struts exploit remote,initial-access
+eternalblue smb 445 windows exploit,lateral-movement
+eternalblue ms17-010 lateral pivot,lateral-movement
+psexec lateral movement windows,lateral-movement
+pass the hash lateral smb,lateral-movement
+wmi lateral movement remote,lateral-movement
+hashdump ntlm windows credentials,credential-access
+mimikatz credential dump lsass,credential-access
+dump hashes credential windows,credential-access
+password brute force credential dump,credential-access
+kerberoast ticket credential,credential-access
+hashdump ntlm windows credential dump,credential-access
+hashdump credentials windows lsass dump,credential-access
+ntlm hash dump windows hashdump,credential-access

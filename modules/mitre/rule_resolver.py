@@ -5,6 +5,7 @@ Confidence: 0.85 – 0.95
 
 # ── Exact exploit-path → ATT&CK technique table ──────────────────────
 EXPLOIT_RULES = {
+    # ── Metasploitable2 (الأصلية) ──────────────────────────────────
     "exploit/unix/ftp/vsftpd_234_backdoor":          ("T1190", "Exploit Public-Facing Application", "initial-access",       0.95),
     "exploit/multi/samba/usermap_script":            ("T1210", "Exploitation of Remote Services",   "lateral-movement",     0.95),
     "exploit/unix/irc/unreal_ircd_3281_backdoor":    ("T1190", "Exploit Public-Facing Application", "initial-access",       0.93),
@@ -13,6 +14,49 @@ EXPLOIT_RULES = {
     "exploit/windows/smb/ms17_010_eternalblue":      ("T1210", "Exploitation of Remote Services",   "lateral-movement",     0.95),
     "exploit/multi/misc/distcc_exec":                ("T1190", "Exploit Public-Facing Application", "initial-access",       0.92),
     "exploit/multi/handler":                         ("T1059", "Command and Scripting Interpreter",  "execution",            0.88),
+
+    # ── Windows — اختراقات حقيقية مشهورة ───────────────────────────
+    "exploit/windows/smb/ms08_067_netapi":           ("T1210", "Exploitation of Remote Services",   "lateral-movement",     0.95),
+    "exploit/windows/rdp/cve_2019_0708_bluekeep_rce":("T1210", "Exploitation of Remote Services",   "lateral-movement",     0.93),
+    "exploit/windows/local/cve_2021_34527_printnightmare":("T1068","Exploitation for Privilege Escalation","privilege-escalation",0.93),
+    "exploit/windows/smb/psexec":                    ("T1021", "Remote Services",                   "lateral-movement",     0.92),
+    "exploit/windows/local/ms16_032_secondary_logon_handle_privesc":("T1068","Exploitation for Privilege Escalation","privilege-escalation",0.90),
+    "exploit/windows/http/icecast_header":           ("T1190", "Exploit Public-Facing Application", "initial-access",       0.88),
+    "exploit/windows/dcerpc/ms03_026_dcom":          ("T1210", "Exploitation of Remote Services",   "lateral-movement",     0.92),
+    "exploit/windows/smb/ms09_050_smb2_negotiate_func_index":("T1210","Exploitation of Remote Services","lateral-movement",0.90),
+
+    # ── Linux — اختراقات حقيقية مشهورة ─────────────────────────────
+    "exploit/linux/local/cve_2021_4034_pwnkit_lpe_pkexec":("T1068","Exploitation for Privilege Escalation","privilege-escalation",0.95),
+    "exploit/linux/local/cve_2022_0847_dirtypipe":   ("T1068", "Exploitation for Privilege Escalation","privilege-escalation",  0.94),
+    "exploit/linux/http/rconfig_ajaxarchivefiles_rce":("T1190","Exploit Public-Facing Application",  "initial-access",       0.90),
+    "exploit/linux/ssh/ssh_x11_forwarding_privesc":  ("T1068", "Exploitation for Privilege Escalation","privilege-escalation",  0.88),
+    "exploit/linux/local/cve_2016_5195_dirtycow":    ("T1068", "Exploitation for Privilege Escalation","privilege-escalation",  0.93),
+
+    # ── Web — اختراقات حقيقية مشهورة عالمياً ───────────────────────
+    "exploit/multi/http/log4shell_header_injection": ("T1190", "Exploit Public-Facing Application", "initial-access",       0.96),
+    "exploit/unix/webapp/joomla_comfields_sqli_rce": ("T1190", "Exploit Public-Facing Application", "initial-access",       0.92),
+    "exploit/multi/http/apache_normalize_path_rce":  ("T1190", "Exploit Public-Facing Application", "initial-access",       0.93),
+    "exploit/multi/http/struts2_content_type_ognl":  ("T1190", "Exploit Public-Facing Application", "initial-access",       0.93),
+    "exploit/multi/http/wp_admin_shell_upload":      ("T1190", "Exploit Public-Facing Application", "initial-access",       0.90),
+    "exploit/multi/http/jenkins_script_console":     ("T1059", "Command and Scripting Interpreter",  "execution",            0.91),
+    "exploit/unix/webapp/php_cgi_arg_injection":     ("T1190", "Exploit Public-Facing Application", "initial-access",       0.89),
+    "exploit/multi/http/spring4shell_rce":           ("T1190", "Exploit Public-Facing Application", "initial-access",       0.94),
+
+    # ── Credential Access / Recon (auxiliary modules) ──────────────
+    "auxiliary/scanner/smb/smb_login":               ("T1078", "Valid Accounts",                    "initial-access",       0.90),
+    "auxiliary/scanner/ssh/ssh_login":                ("T1078", "Valid Accounts",                    "initial-access",       0.88),
+    "auxiliary/scanner/ftp/ftp_login":                ("T1078", "Valid Accounts",                    "initial-access",       0.87),
+    "auxiliary/scanner/mysql/mysql_login":            ("T1078", "Valid Accounts",                    "initial-access",       0.86),
+    "auxiliary/scanner/rdp/rdp_scanner":               ("T1018", "Remote System Discovery",           "discovery",            0.85),
+    "post/multi/recon/local_exploit_suggester":       ("T1068", "Exploitation for Privilege Escalation","privilege-escalation",0.85),
+    "post/multi/gather/checkvm":                      ("T1497", "Virtualization/Sandbox Evasion",     "defense-evasion",      0.85),
+    "post/windows/gather/credentials/credential_collector":("T1003","OS Credential Dumping",          "credential-access",   0.92),
+    "post/linux/gather/hashdump":                     ("T1003", "OS Credential Dumping",              "credential-access",   0.92),
+
+    # ── C2 / Persistence ─────────────────────────────────────────────
+    "exploit/multi/script/web_delivery":              ("T1105", "Ingress Tool Transfer",              "command-and-control", 0.88),
+    "post/windows/manage/persistence_exe":            ("T1547", "Boot/Logon Autostart Execution",      "persistence",         0.88),
+    "post/linux/manage/persistence":                  ("T1547", "Boot/Logon Autostart Execution",      "persistence",         0.87),
 }
 
 # ── Service/port fallback rules ───────────────────────────────────────

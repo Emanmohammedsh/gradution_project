@@ -26,8 +26,12 @@ class ThreatCorrelation:
         product = finding.get("product", "")
         version = finding.get("version", "")
 
-        cvss  = self._cvss.score(cve)
-        epss  = self._epss.score(cve)
+        cvss_found = self._cvss.score(cve)
+        # No CVE-based score found (common for old backdoors with no CVE record) ->
+        # keep the finding's own CVSS estimate from vulnerability mapping (Phase 3)
+        # instead of silently overwriting it with a generic default.
+        cvss   = cvss_found if cvss_found is not None else finding.get("cvss", 5.0)
+        epss   = self._epss.score(cve)
         is_kev = self._kev.is_kev(cve)
 
         finding["cvss_live"]    = cvss

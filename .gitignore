@@ -222,3 +222,4 @@ database/redteam.db
 logs/
 *.swp
 .*.swp
+exploit_model.pkl

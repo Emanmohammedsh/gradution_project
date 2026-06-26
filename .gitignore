@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated reports
+reports/attack_chain_*.json
+reports/attack_layer_*.json
+reports/json/
+reports/*.swp
+
+# Vim swap files
+*.swp
+*.swo

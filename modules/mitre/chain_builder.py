@@ -56,7 +56,7 @@ class ChainBuilder:
 
         for result in mapped_results:
             for layer_result in result.get("layers", []):
-                tactic = layer_result.get("tactic", "unknown").lower()
+                tactic = str(layer_result.get("tactic", "unknown")).lower()
                 entry  = {
                     "technique_id":   layer_result.get("technique_id", "T?"),
                     "technique_name": layer_result.get("technique_name", "Unknown"),

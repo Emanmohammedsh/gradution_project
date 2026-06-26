@@ -18,8 +18,8 @@ class CoverageAnalyzer:
                 tid = layer.get("technique_id", "")
                 if not tid.startswith("T-"):
                     covered_techs.add(tid)
-                tactic = layer.get("tactic", "")
-                if tactic:
+                tactic = str(layer.get("tactic", ""))
+                if tactic and not tactic.isdigit():
                     covered_tactics.add(tactic)
 
         total_tactics = len(MITRE_TACTICS_ORDER)

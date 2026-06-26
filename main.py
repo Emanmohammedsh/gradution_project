@@ -123,8 +123,9 @@ def main():
     exploiter       = ExploiterModule(lhost)
     exploit_run     = exploiter.run_exploits(high_risk_findings)
     exploit_results = exploit_run        # list[dict] — per-exploit results
+    any_success = any(r.get("success") for r in exploit_results)
     log.info("Exploitation complete — %d attempts, success=%s",
-             len(exploit_results), exploit_run["success"])
+             len(exploit_results), any_success)
 
     # ── Phase 7: Post-Exploitation ────────────────────────────────────
     print(f"\n[Phase 7] Post-Exploitation")
@@ -208,18 +209,22 @@ def main():
     # ── Phase 12: Report + DB ─────────────────────────────────────────
     print(f"\n[Phase 12] Generating Reports & Saving to Database")
     generator   = ReportGenerator()
+    from modules.mitre.coverage_analyzer import CoverageAnalyzer
+    coverage = CoverageAnalyzer().analyze(mapped_results)
+
+    scan_results_report = scan_results  # dict keyed by host with ports list
+    risk_summary_report = {
+        "total": len(vuln_findings),
+        "high_risk": len([f for f in vuln_findings if f.get("risk_score", 0) >= 30]),
+    }
     report_file = generator.generate(
-        target          = target,
-        live_hosts      = live_hosts,
-        scan_results    = scan_results,
-        vuln_findings   = vuln_findings,
-        exploit_results = mapped_results,
-        post_data       = post_data,
+        scan_results    = scan_results_report,
+        findings        = vuln_findings,
+        mapped_results  = mapped_results,
         attack_chain    = attack_chain,
-        graph_data      = graph_analysis,
-        session_id      = session_id,
-        ai_results      = ai_results,
-        formats         = ["json", "pdf"],
+        risk_summary    = risk_summary_report,
+        coverage        = coverage,
+        formats         = ["json"],
     )
 
     # Database

@@ -85,12 +85,13 @@ class RuleResolver:
             if key in exploit:
                 return self._result(tid, tname, tactic, conf, "rule_exact")
 
-        # 2. Post-exploit commands (highest priority for enrichment)
-        for cmd in commands:
-            cmd_lower = cmd.lower().strip()
-            for kw, (tid, tname, tactic, conf) in POST_EXPLOIT_MAP.items():
-                if kw in cmd_lower:
-                    return self._result(tid, tname, tactic, conf, "post_exploit")
+        # 2. Post-exploit commands — only if exploit succeeded
+        if context.get("success", False):
+            for cmd in commands:
+                cmd_lower = cmd.lower().strip()
+                for kw, (tid, tname, tactic, conf) in POST_EXPLOIT_MAP.items():
+                    if kw in cmd_lower:
+                        return self._result(tid, tname, tactic, conf, "post_exploit")
 
         # 3. Service name
         if service in SERVICE_RULES:

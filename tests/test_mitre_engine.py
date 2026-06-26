@@ -54,6 +54,7 @@ class TestRuleResolver:
         result = self.resolver.resolve({
             "exploit": "", "service": "misc", "cve": "",
             "post_commands": ["hashdump"],
+            "success": True,
         })
         assert result is not None
         assert result["technique_id"] == "T1003"
@@ -64,6 +65,7 @@ class TestRuleResolver:
         result = self.resolver.resolve({
             "exploit": "", "service": "misc", "cve": "",
             "post_commands": ["sysinfo"],
+            "success": True,
         })
         assert result is not None
         assert result["technique_id"] == "T1082"

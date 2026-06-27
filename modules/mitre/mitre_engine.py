@@ -42,7 +42,8 @@ class MitreEngine:
         all_mapped = []
 
         for result in exploit_results:
-            context = self._build_context(result, post_commands or [])
+            cmds = (post_commands or []) if result.get("success", False) else []
+            context = self._build_context(result, cmds)
             mapped  = self._classify(context)
 
             result["mitre"]        = mapped["primary"]

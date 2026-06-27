@@ -94,9 +94,12 @@ class MLClassifier:
             else:
                 conf = 0.60
             if getattr(self, "_le", None) is not None:
-                label = self._le.inverse_transform([int(pred)])[0]
+                try:
+                    label = self._le.inverse_transform([pred])[0]
+                except Exception:
+                    label = self._le.inverse_transform([int(pred)])[0]
             else:
-                label = str(self._model.classes_[pred]) if hasattr(pred, "__index__") else str(pred)
+                label = str(pred)
 
             return {
                 "technique_id":   "T-ML",

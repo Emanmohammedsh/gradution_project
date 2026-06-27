@@ -133,6 +133,7 @@ class MitreEngine:
             "host":          result.get("host", ""),
             "port":          result.get("port", 0),
             "post_commands": post_commands,
+            "success":       result.get("success", False),
         }
 
     def _print_result(self, result: dict):

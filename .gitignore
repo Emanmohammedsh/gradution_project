@@ -223,3 +223,5 @@ logs/
 *.swp
 .*.swp
 exploit_model.pkl
+*.swp
+*.swo

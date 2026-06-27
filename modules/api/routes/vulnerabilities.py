@@ -86,7 +86,9 @@ async def kev_vulnerabilities():
 
 @router.get("/{cve_id}", response_model=VulnOut)
 async def get_by_cve(cve_id: str):
+    from fastapi import HTTPException
     vulns = _get_latest_vulns()
     for v in vulns:
         if v.get("cve", "").lower() == cve_id.lower():
             return _to_vuln_out(v)
+    raise HTTPException(status_code=404, detail="CVE not found")

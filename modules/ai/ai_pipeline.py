@@ -37,6 +37,13 @@ class AIPipeline:
         # توصيات بناءً على التكتيكات
         recommendations = self.recommender.recommend(tactics)
 
+        for result in mapped_results:
+            ctx = {'exploit': result.get('exploit',''), 'service': result.get('service',''), 'cve': result.get('cve',''), 'edb_title': result.get('edb_title','')}
+            ml_pred = self.predictor.predict(ctx)
+            if ml_pred:
+                result['ai_tactic'] = ml_pred.get('tactic','')
+                result['ai_confidence'] = ml_pred.get('confidence', 0.0)
+
         # مقارنة مع مجموعات هاكرز معروفة
         if technique_ids:
             adversary_match = self.adversary.score(technique_ids)

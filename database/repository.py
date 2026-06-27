@@ -192,7 +192,7 @@ def get_all_sessions() -> list[dict]:
                 "session_id": r.session_id,
                 "target":     r.target,
                 "lhost":      r.lhost,
-                "live_hosts": r.live_hosts_list(),
+                "live_hosts": r.live_hosts or [],
                 "status":     r.status,
                 "risk_score": r.risk_score,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -231,7 +231,12 @@ def get_vulns_by_session(db_id: int) -> list[dict]:
         rows = (db.query(Vulnerability)
                   .filter(Vulnerability.session_id == db_id)
                   .all())
-        return [json.loads(r.raw_json) for r in rows]
+        return [{
+            "host": r.host, "port": r.port, "service": r.service,
+            "cve": r.cve, "cvss": r.cvss, "severity": r.severity,
+            "risk_score": r.risk_score, "title": r.title,
+            "exploit": r.exploit, "intel": r.intel or {},
+        } for r in rows]
     finally:
         db.close()
 
@@ -249,7 +254,7 @@ def get_mitre_by_session(db_id: int) -> list[dict]:
                 "tactic":         r.tactic,
                 "confidence":     r.confidence,
                 "source":         r.source,
-                "fused_score":    r.fused_score,
+                "fused_score":    getattr(r, "fused_score", None),
                 "host":           r.host,
             }
             for r in rows
@@ -264,7 +269,11 @@ def get_exploits_by_session(db_id: int) -> list[dict]:
         rows = (db.query(ExploitResult)
                   .filter(ExploitResult.session_id == db_id)
                   .all())
-        return [json.loads(r.raw_json) for r in rows]
+        return [{
+            "host": r.host, "port": r.port,
+            "exploit": r.exploit, "success": r.success,
+            "score": r.score, "details": r.details or {},
+        } for r in rows]
     finally:
         db.close()
 

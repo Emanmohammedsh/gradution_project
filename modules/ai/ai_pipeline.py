@@ -35,7 +35,7 @@ class AIPipeline:
                     technique_ids.append(tid)
 
         # توصيات بناءً على التكتيكات
-        recommendations = self.recommender.recommend(tactics)
+        recommendations = self.recommender.recommend(tactics, findings=mapped_results)
 
         for result in mapped_results:
             ctx = {'exploit': result.get('exploit',''), 'service': result.get('service',''), 'cve': result.get('cve',''), 'edb_title': result.get('edb_title','')}

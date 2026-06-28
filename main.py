@@ -347,7 +347,7 @@ def main():
         attack_chain   = attack_chain,
         risk_summary   = risk_summary,
         coverage       = coverage,
-        formats        = ["json"],
+        formats        = ["json", "pdf"],
     )
     report_file = report.get("saved_files", {}).get("json", "")
 

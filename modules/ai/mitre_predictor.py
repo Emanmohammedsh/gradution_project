@@ -19,7 +19,16 @@ class MitrePredictor:
         from modules.ai.feature_engineering import FeatureEngineering
         text  = FeatureEngineering().transform_one(context)
         X     = self._bundle["vectorizer"].transform([text])
-        idx   = self._bundle["model"].predict(X)[0]
-        proba = self._bundle["model"].predict_proba(X)[0].max()
+        model = self._bundle["model"]
+        idx   = model.predict(X)[0]
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(X)[0].max()
+        elif hasattr(model, "decision_function"):
+            import numpy as np
+            scores = model.decision_function(X)[0]
+            scores = np.exp(scores - scores.max())
+            proba  = float(scores.max() / scores.sum())
+        else:
+            proba = 0.7
         label = self._bundle["label_encoder"].inverse_transform([idx])[0]
         return {"tactic": label, "confidence": round(float(proba), 3), "source": "ml"}

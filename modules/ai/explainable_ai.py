@@ -6,9 +6,9 @@ Provides human-readable explanations for ML predictions (XAI).
 
 class ExplainableAI:
 
-    def explain(self, context: dict, prediction: dict) -> str:
+    def explain(self, context: dict, prediction: dict, confidence: float = 0.0) -> str:
         tactic = prediction.get("tactic", "unknown")
-        conf   = prediction.get("confidence", 0)
+        conf   = confidence if confidence else prediction.get("confidence", 0)
         source = prediction.get("source", "ml")
 
         signals = []

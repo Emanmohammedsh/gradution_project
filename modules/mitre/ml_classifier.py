@@ -101,10 +101,21 @@ class MLClassifier:
             else:
                 label = str(pred)
 
+            # A merged compound label (e.g. "persistence+privilege-escalation")
+            # represents a technique the official MITRE taxonomy classifies
+            # under more than one tactic. Downstream code (tactic_linker,
+            # attack_chain_integrator, etc.) does exact string matching
+            # against the standard 14 tactics, so we keep "tactic" as a
+            # single primary value for backward compatibility, and expose
+            # the full set separately for any code that wants it.
+            tactic_parts = label.split("+")
+            primary_tactic = tactic_parts[0]
+
             return {
                 "technique_id":   "T-ML",
                 "technique_name": f"ML predicted: {label}",
-                "tactic":         label,
+                "tactic":         primary_tactic,
+                "tactics":        tactic_parts,
                 "confidence":     round(min(0.70, max(0.50, conf)), 3),
                 "source":         "ml",
             }
